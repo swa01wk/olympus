@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: olympus
+      POSTGRES_PASSWORD: olympus
+      POSTGRES_DB: olympus
+    ports:
+      - "5432:5432"
+    volumes:
+      - olympus_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U olympus -d olympus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  control-api:
+    profiles: ["app"]
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://olympus:olympus@postgres:5432/olympus
+      OLYMPUS_ENV: local
+      OLYMPUS_STORAGE_ROOT: /data/olympus
+      OLYMPUS_WORKSPACE_ROOT: /data/workspaces
+    volumes:
+      - olympus_workspace:/data/workspaces
+      - olympus_storage:/data/olympus
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  olympus_pgdata:
+  olympus_workspace:
+  olympus_storage:

@@ -11,11 +11,12 @@ Spec: `docs/design/olympus-review-loop-plan.md`. Background on the journeys, sta
 
 ## How to run a phase in Cursor (Composer)
 
-1. Open the repo root in Cursor. Pull `main`.
-2. Create a branch: `git switch -c rl<N>-<short-name>`.
-3. New Composer chat, Agent mode, model **Composer**. Paste the whole prompt file for the phase.
-4. Composer works one step at a time and stops after each step with a report. Reply `next` to continue, or give corrections.
-5. When the phase's acceptance checks pass, open a PR. Merge before starting the next phase.
+Everything happens on `main`; there are no per-phase branches.
+
+1. Open the repo root in Cursor. `git switch main && git pull`.
+2. New Composer chat, Agent mode, model **Composer 2.5**. Paste the whole prompt file for the phase.
+3. Composer works one step at a time, commits each finished step to `main` (`RL<N>.<k>: <summary>`), and stops with a report. Reply `next` to continue, or give corrections.
+4. When the phase's acceptance checks pass, Composer pushes `main`. Start the next phase in a new chat.
 
 Long phases have numbered steps (RL2.1, RL2.2 …). If a Composer chat gets long, start a new one with: `Continue phase RL<N> from step RL<N>.<k>. Read docs/design/cursor-prompts/RL<N>-*.md and STATUS.md §17 first.`
 

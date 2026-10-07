@@ -1,6 +1,6 @@
 # RL2 — Revision loop, chat that sees the content, auto-requested approvals
 
-Paste everything below the line into a new Cursor Composer chat (Agent mode). Work on a branch `rl2-review-loop`. RL1 must be merged first.
+Paste everything below the line into a new Cursor Composer chat (Agent mode). Work directly on `main`. RL1 must be complete first.
 
 ---
 
@@ -25,7 +25,8 @@ You are adding the review loop to **Olympus**, a governed AI software-delivery c
 
 1. Restate the step's goal and list the files you'll change. Then implement.
 2. Backend: `make lint`, `make typecheck`, `make test-unit`, plus the persistence or integration tests you touched (`uv run pytest -m "persistence or integration" tests/<path>`; needs Docker). Frontend: `npm run check` in `apps/dashboard`.
-3. Stop after each step with: what changed, test results, anything left over. Wait for `next`.
+3. Commit each finished step to `main` with the message `RL2.<k>: <summary>`, and push when the phase's acceptance checks pass. Don't create branches.
+4. Stop after each step with: what changed, test results, the commit, anything left over. Wait for `next`.
 
 ---
 

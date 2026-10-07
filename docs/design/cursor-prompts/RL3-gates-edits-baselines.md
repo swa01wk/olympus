@@ -1,6 +1,6 @@
 # RL3 — Human gates, direct edits, baselines that can change
 
-Paste everything below the line into a new Cursor Composer chat (Agent mode). Work on a branch `rl3-gates-edits-baselines`. RL2 must be merged first.
+Paste everything below the line into a new Cursor Composer chat (Agent mode). Work directly on `main`. RL2 must be complete first.
 
 ---
 
@@ -39,7 +39,8 @@ You are closing the remaining governance gaps in **Olympus** (Python 3.12, FastA
 
 1. Restate the step's goal and list the files. Then implement.
 2. `make lint`, `make typecheck`, `make test-unit`, plus the persistence and integration tests you touched (Docker); `make migrate` against a fresh database for the migration; `npm run check` for Studio steps.
-3. Stop after each step with: what changed, test results, anything left over. Wait for `next`.
+3. Commit each finished step to `main` with the message `RL3.<k>: <summary>`, and push when the phase's acceptance checks pass. Don't create branches.
+4. Stop after each step with: what changed, test results, the commit, anything left over. Wait for `next`.
 
 ---
 

@@ -1,6 +1,6 @@
 # RL4 — Prove it: honest journey tests and a live run through the Studio
 
-Paste everything below the line into a new Cursor Composer chat (Agent mode). Work on a branch `rl4-prove-it`. RL1–RL3 must be merged first.
+Paste everything below the line into a new Cursor Composer chat (Agent mode). Work directly on `main`. RL1–RL3 must be complete first.
 
 ---
 
@@ -26,7 +26,8 @@ You are proving that **Olympus** works end to end with live agents and real huma
 
 1. Restate the step's goal and the files. Implement.
 2. Deterministic lanes: `make check`. Live lanes: run what your keys allow and report cost and duration.
-3. Stop after each step with a report. Wait for `next`.
+3. Commit each finished step to `main` with the message `RL4.<k>: <summary>`, and push when the phase's acceptance checks pass. Don't create branches.
+4. Stop after each step with a report and the commit. Wait for `next`.
 
 ---
 

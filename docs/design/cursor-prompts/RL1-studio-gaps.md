@@ -1,6 +1,6 @@
 # RL1 — Close the Studio gaps (frontend only)
 
-Paste everything below the line into a new Cursor Composer chat (Agent mode). Work on a branch `rl1-studio-gaps`.
+Paste everything below the line into a new Cursor Composer chat (Agent mode). Work directly on `main`.
 
 ---
 
@@ -27,7 +27,8 @@ You are extending **Olympus Studio**, the chat + workspace operator UI in `apps/
 1. Restate the step's goal and list the files you'll change. Then implement.
 2. Add or update unit tests in `apps/dashboard/tests/unit` (mock `fetch`, assert method, path, query, body).
 3. Run `npm run check` in `apps/dashboard` until green.
-4. Stop after each step with: what changed, test results, anything left over. Wait for `next`.
+4. Commit each finished step to `main` with the message `RL1.<k>: <summary>`, and push when the phase's acceptance checks pass. Don't create branches.
+5. Stop after each step with: what changed, test results, the commit, anything left over. Wait for `next`.
 
 ---
 

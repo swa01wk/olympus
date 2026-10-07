@@ -8,13 +8,13 @@ You are adding the review loop to **Olympus**, a governed AI software-delivery c
 
 ## Read first
 
-1. `docs/design/olympus-review-loop-plan.md` — this phase fixes **G1–G4** and **G11** and implements decisions **1–3** (§2, §3).
+1. `docs/design/olympus-review-loop-plan.md` — this phase fixes **G1–G4** and **G11–G13** and implements decisions **1–3** and **9–10** (§2, §3).
 2. `docs/design/olympus-chat-workspace-plan.md` §1 and §4 — the Studio's rules.
 3. The files named in each step. Read the real code before changing it; never invent a field, enum value or route.
 
 ## Rules
 
-- **Backend changes are allowed only in these places**: `core/commands/handlers.py` (`handle_approval_decide`), a new package `core/review/`, `core/planning/orchestrator.py`, `core/planning/completion.py`, `core/planning/architecture/service.py`, `core/planning/implementation_specs/service.py`, `core/product_model/decomposition.py`, `core/product_model/changes/orchestrator.py`, `core/product_model/changes/completion.py`, `core/product_model/defects/orchestrator.py`, `core/orchestrator/` (all), `core/runtime/profiles/kira.py`, `core/runtime/profiles/atlas.py`, `core/runtime/profiles/orchestrator.py`, `agents/kira/prompts/*`, `agents/atlas/prompts/*`, `agents/orchestrator/*`, `apps/control_api/routers/orchestrator.py`. Anything else needs my OK first: say which file and why, then stop.
+- **Backend changes are allowed only in these places**: `core/commands/handlers.py` (`handle_approval_decide`), a new package `core/review/`, `core/planning/orchestrator.py`, `core/planning/completion.py`, `core/planning/architecture/service.py`, `core/planning/implementation_specs/service.py`, `core/product_model/decomposition.py`, `core/product_model/changes/orchestrator.py`, `core/product_model/changes/completion.py`, `core/product_model/defects/orchestrator.py`, `core/orchestrator/` (all), `core/runtime/profiles/kira.py`, `core/runtime/profiles/atlas.py`, `core/runtime/profiles/orchestrator.py`, `agents/kira/prompts/*`, `agents/atlas/prompts/*`, `agents/orchestrator/*`, `apps/control_api/routers/orchestrator.py`, `core/commands/registry.py`, `core/commands/catalog.py`, a new `core/commands/generation_handlers.py`, a new `core/product_model/spec_view.py`, `apps/control_api/routers/specs.py` and `apps/control_api/routers/product_model.py` (additive read fields and one new read route only). Anything else needs my OK first: say which file and why, then stop.
 - No migration in this phase. If you find you need one, stop and say why.
 - State machines (`core/state/machines.py`) and guards do not change.
 - **Approvals are decided only by a human `APPROVER`, only in the Decision panel.** The chat may draft a note; it never decides.
@@ -141,10 +141,66 @@ Files: `apps/dashboard/src/api/*`, `apps/dashboard/components/studio/*`, `apps/d
 - NAVIGATE turns: `navigate_to` selects the stage (`?stage=`).
 - Tests: the card fills the note and doesn't submit; the diff helper; the revising state follows events; `focus` is sent.
 
-## RL2.8 — Live check and status
+## RL2.8 — One product-spec view for both entry points (G12, decision 9)
+
+A greenfield PRD and a brownfield repo end in the same canonical model, but nothing shows it as one document, and the API hides where each rule came from.
+
+Backend (additive only; existing fields and routes keep their shape):
+
+- `GET /specs/{id}` (`apps/control_api/routers/specs.py`): add `promoted_from_id` and `derived_from_source_version_id`, and `given`, `when`, `then` on each acceptance criterion.
+- `FeatureResponse` (`apps/control_api/routers/product_model.py`): add `description`, `origin` (`ModelOrigin`) and `source_refs`.
+- New read route `GET /projects/{p}/product-spec`, built by `core/product_model/spec_view.py`. It returns, per capability, per feature, the **current canonical spec**: the latest version per lineage with status APPROVED, PROMOTED or CONFIRMED_EXISTING. Each spec carries:
+  - its body;
+  - its ACs with given/when/then and mandatory flag;
+  - a `provenance` block:
+    - greenfield: product source id, version, title and the feature's `source_refs` (PRD sections);
+    - brownfield: follow `promoted_from_id` to the recovered spec and return its `confidence` and `recovered_evidence`;
+  - `known_gaps`: uncertainties decided `ACCEPT_KNOWN_GAP` that cite this feature's entities.
+- Tests: persistence tests for one greenfield-decomposed spec and one promoted recovered spec; the new route returns both in the same shape.
+
+Studio:
+
+- `components/studio/ProductSpecView.tsx`: renders `GET /projects/{p}/product-spec` as a PRD-shaped document, reachable from the control panel ("Product spec").
+  - Layout: capability headings, feature headings, behaviour, rules, ACs as given/when/then.
+  - Each rule and AC has a provenance chip in words: "PRD v2 · Feature: Archive project" (opens the source content), or "HIGH · tests/test_cards.py::test_move_card".
+  - Known gaps are marked "Known gap: not confirmed".
+- Embed it in the PRODUCT_MODEL stage (greenfield, after scope approval) and the BASELINE and READY stages (brownfield).
+- A "Copy as Markdown" button produces the same document as text.
+- Tests: both provenance kinds render; the Markdown export matches a snapshot.
+
+## RL2.9 — The chat can propose every generate step (G13, decision 10)
+
+Today the chat can only propose commands registered on the bus (`core/commands/registry.py`) and listed in `core/commands/catalog.py`. The generate steps are REST-only.
+
+- In `core/commands/generation_handlers.py`, add handlers that call the **same** orchestrator or service methods the REST routes call:
+  - `architecture.propose {cycle_id}`
+  - `implementation_specs.generate {cycle_id, feature_spec_id?}`
+  - `task_plan.generate {cycle_id}`
+  - `change_interpretation.rerun {cycle_id}`
+  - `architecture_delta.propose {cycle_id}`
+  - `release.create {cycle_id}`
+
+  Register them in `build_command_bus`. Add catalog entries with `target_type: "delivery_cycle"`, `required_roles: ["OPERATOR"]` and a payload schema. The REST routes stay as they are.
+- `agents/orchestrator/prompts/converse.md`: when the cycle sits at a stage whose generate step hasn't run, or has finished and was rejected, propose the matching command with a one-line rationale. Never propose `approval.decide`.
+- Studio `src/api/proposal-routes.ts`: map each new command to its existing REST route:
+  - `architecture.propose` → `POST /delivery-cycles/{c}/architecture/propose`
+  - `implementation_specs.generate` → `POST /delivery-cycles/{c}/implementation-specs/generate`
+  - `task_plan.generate` → `POST /delivery-cycles/{c}/task-plan/generate`
+  - `change_interpretation.rerun` → `POST /delivery-cycles/{c}/change-interpretation/rerun`
+  - `architecture_delta.propose` → `POST /delivery-cycles/{c}/architecture-delta/propose`
+  - `release.create` → `POST /delivery-cycles/{c}/release`
+
+  The proposal card shows the route and runs it only after a click.
+- Tests:
+  - the catalog export includes the six commands;
+  - the orchestrator validator accepts a proposal for each;
+  - each handler calls its orchestrator (mocked);
+  - `routeForProposal` has a case per command.
+
+## RL2.10 — Live check and status
 
 - Add `tests/integration/live_llm/test_revision_loop_live.py` (`live_llm` marker, skipped without keys): request changes on a real Atlas proposal with the note "Put the archived-project rule in one ProjectGuard used by the service layer". Assert v2 exists, v1 is SUPERSEDED, a new PENDING approval exists, and v2's decisions mention a single guard.
-- Update `STATUS.md` §17: RL2 COMPLETE with the milestone and test results, plus a changelog row. In `docs/design/olympus-chat-workspace-plan.md` §3, mark B-01 (`navigate_to` and `refs`) fixed.
+- Update `STATUS.md` §17: RL2 COMPLETE with the milestone and test results, plus a changelog row. In `docs/design/olympus-chat-workspace-plan.md` §3, mark B-01 (`navigate_to` and `refs`) and B-03 (chat can't propose REST-only steps) fixed.
 
 ## Phase acceptance
 
@@ -153,3 +209,5 @@ Files: `apps/dashboard/src/api/*`, `apps/dashboard/components/studio/*`, `apps/d
   1. Ask the chat "why is X done this way?" and get an answer that cites the architecture's decisions.
   2. Click Request changes with a note.
   3. See "Revising", then a v1→v2 diff that changes only what the note asked, with a fresh approval in the Decision panel.
+- The chat proposes "generate the architecture" at an empty ARCHITECTURE stage, and the card runs it.
+- "Product spec" renders a greenfield project and a brownfield project in the same shape, each rule showing its source.

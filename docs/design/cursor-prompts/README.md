@@ -1,11 +1,11 @@
 # Cursor prompts — review loop (RL1–RL4)
 
-Spec: `docs/design/olympus-review-loop-plan.md`. Run the phases in order; each builds on the previous one.
+Spec: `docs/design/olympus-review-loop-plan.md`. Background on the journeys, stages and human checkpoints: `docs/design/olympus-journeys.md`. Run the phases in order; each builds on the previous one.
 
 | Phase | Prompt | Touches | Done when |
 |---|---|---|---|
 | RL1 | `RL1-studio-gaps.md` | `apps/dashboard`, `docs/` | All four journeys can be driven from the Studio without calling the API by hand |
-| RL2 | `RL2-review-loop.md` | backend (scoped) + `apps/dashboard` | Request changes on an architecture produces a revised v2 with a diff and a fresh approval; chat answers from the content |
+| RL2 | `RL2-review-loop.md` | backend (scoped) + `apps/dashboard` | Request changes on an architecture produces a revised v2 with a diff and a fresh approval; chat answers from the content and proposes generate steps; one product-spec view for greenfield and brownfield |
 | RL3 | `RL3-gates-edits-baselines.md` | backend (scoped) + `apps/dashboard` | A bug fix that contradicts an onboarding baseline reaches release with a human-confirmed expected behaviour and the baseline superseded |
 | RL4 | `RL4-prove-it.md` | `tests/`, `apps/dashboard/tests/e2e` | The acceptance evaluator passes on a live four-journey Studio run with no fallback flag |
 

@@ -33,6 +33,12 @@ export const queryKeys = {
   projectOverview: (projectId: string) => ["views", "project-overview", projectId] as const,
   coverage: (projectId: string) => ["views", "coverage", projectId] as const,
   repository: (projectId: string) => ["views", "repository", projectId] as const,
+  repositories: {
+    list: (projectId: string) => ["repositories", "list", projectId] as const,
+    detail: (repositoryId: string) => ["repositories", "detail", repositoryId] as const,
+    materializations: (repositoryId: string) =>
+      ["repositories", "materializations", repositoryId] as const,
+  },
   agentActivity: (projectId: string) => ["views", "agent-activity", projectId] as const,
   features: (projectId: string) => ["product", "features", projectId] as const,
   capabilities: (projectId: string) => ["product", "capabilities", projectId] as const,

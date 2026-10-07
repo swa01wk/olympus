@@ -56,4 +56,7 @@ export function invalidateStudioCycle(
   void queryClient.invalidateQueries({ queryKey: queryKeys.journey.readiness(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.impactLatest(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.knowledge(scope.cycleId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.repositories.list(scope.projectId) });
+  void queryClient.invalidateQueries({ queryKey: ["repositories", "detail"] });
+  void queryClient.invalidateQueries({ queryKey: ["repositories", "materializations"] });
 }

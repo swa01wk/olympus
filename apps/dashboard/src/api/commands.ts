@@ -4,6 +4,7 @@ import { newIdempotencyKey } from "@/lib/utils";
 import type { DeliveryCycle } from "@/src/api/types/core";
 import type { FeatureSpecBody } from "@/src/api/types/product-model";
 import type { OrchestratorSession } from "@/src/api/types/orchestrator";
+import type { RegisterRepositoryInput, Repository } from "@/src/api/types/repository";
 
 export type CommandResult = Record<string, unknown>;
 
@@ -84,6 +85,40 @@ export async function createDeliveryCycle(
   return apiRequest<DeliveryCycle>(`/projects/${projectId}/delivery-cycles`, {
     method: "POST",
     body,
+    idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
+export async function registerRepository(
+  projectId: string,
+  input: RegisterRepositoryInput,
+  idempotencyKey?: string,
+) {
+  return apiRequest<Repository>(`/projects/${projectId}/repositories`, {
+    method: "POST",
+    body: {
+      name: input.name,
+      provider: input.provider,
+      remote_url: input.remote_url,
+      default_branch: input.default_branch ?? null,
+      credential_ref: input.credential_ref ?? "none:",
+      source_type: "EXTERNAL_CLONE",
+    },
+    idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
+export async function putSecret(name: string, value: string, idempotencyKey?: string) {
+  return apiRequest<{ credential_ref: string }>(`/secrets/${name}`, {
+    method: "PUT",
+    body: { value },
+    idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
+export async function retryMaterialization(repositoryId: string, idempotencyKey?: string) {
+  return apiRequest<Repository>(`/repositories/${repositoryId}/commands/retry_materialization`, {
+    method: "POST",
     idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
   });
 }

@@ -16,8 +16,30 @@ export function previewClarificationAnswer(clarificationId: string, answer: stri
   return `POST /clarifications/${clarificationId}/answer · answer=${truncateText(answer, 48)}`;
 }
 
-export function previewCreateCycle(projectId: string, type: string, objective: string): string {
-  return `POST /projects/${projectId}/delivery-cycles · type=${type} · objective=${truncateText(objective, 64)}`;
+export function previewCreateCycle(
+  projectId: string,
+  type: string,
+  objective: string,
+  repositoryId?: string | null,
+): string {
+  const repoHint = repositoryId ? ` · repository_id=${repositoryId}` : "";
+  return `POST /projects/${projectId}/delivery-cycles · type=${type} · objective=${truncateText(objective, 64)}${repoHint}`;
+}
+
+export function previewPutSecret(name: string): string {
+  return `PUT /secrets/${name} · value=…`;
+}
+
+export function previewRegisterRepository(
+  projectId: string,
+  body: Record<string, unknown>,
+  idempotencyKey: string,
+): string {
+  return `POST /projects/${projectId}/repositories · ${truncateText(JSON.stringify(body), 80)} · Idempotency-Key=${truncateKey(idempotencyKey)}`;
+}
+
+export function previewRetryMaterialization(repositoryId: string, idempotencyKey: string): string {
+  return `POST /repositories/${repositoryId}/commands/retry_materialization · Idempotency-Key=${truncateKey(idempotencyKey)}`;
 }
 
 export function previewCycleCommand(

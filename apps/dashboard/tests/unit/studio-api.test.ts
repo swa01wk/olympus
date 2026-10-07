@@ -13,10 +13,13 @@ import {
   generateTaskPlan,
   postOrchestratorTurn,
   proposeArchitecture,
+  putSecret,
+  registerRepository,
   requestApproval,
   requestArchitectureApproval,
   requestImplementationSpecApproval,
   requestScopeApproval,
+  retryMaterialization,
   uploadProductSource,
 } from "@/src/api/commands";
 import {
@@ -39,8 +42,11 @@ import {
   listFeatureSpecs,
   listFeatures,
   listImplementationSpecs,
+  listMaterializations,
+  listProjectRepositories,
   listSources,
   listTaskPlans,
+  getRepository,
 } from "@/src/api/resources";
 
 function mockFetchJson(payload: string = "[]") {
@@ -194,6 +200,73 @@ describe("C1 studio reads", () => {
     const fetchMock = mockFetchJson('{"id":"s1","turns":[]}');
     await fetchOrchestratorSession("sess-1");
     expect(firstCall(fetchMock)[0]).toContain("/orchestrator/sessions/sess-1");
+  });
+});
+
+describe("RL1.2 repository client", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("registerRepository", async () => {
+    const fetchMock = mockFetchJson("{}");
+    await registerRepository(
+      "proj-1",
+      {
+        name: "app",
+        provider: "GITHUB",
+        remote_url: "https://github.com/org/app.git",
+        default_branch: "main",
+      },
+      "idem-reg",
+    );
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/projects/proj-1/repositories");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-reg");
+    expect(JSON.parse(init.body as string)).toEqual({
+      name: "app",
+      provider: "GITHUB",
+      remote_url: "https://github.com/org/app.git",
+      default_branch: "main",
+      credential_ref: "none:",
+      source_type: "EXTERNAL_CLONE",
+    });
+  });
+
+  it("putSecret", async () => {
+    const fetchMock = mockFetchJson('{"credential_ref":"secret:repo-1"}');
+    await putSecret("repo-PRJ-app", "tok-abc", "idem-sec");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/secrets/repo-PRJ-app");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ value: "tok-abc" });
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-sec");
+  });
+
+  it("retryMaterialization", async () => {
+    const fetchMock = mockFetchJson("{}");
+    await retryMaterialization("repo-9", "idem-retry");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/repositories/repo-9/commands/retry_materialization");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-retry");
+  });
+
+  it("listProjectRepositories", async () => {
+    const fetchMock = mockFetchJson("[]");
+    await listProjectRepositories("proj-1");
+    expect(firstCall(fetchMock)[0]).toContain("/projects/proj-1/repositories");
+  });
+
+  it("getRepository", async () => {
+    const fetchMock = mockFetchJson("{}");
+    await getRepository("repo-1");
+    expect(firstCall(fetchMock)[0]).toContain("/repositories/repo-1");
+  });
+
+  it("listMaterializations", async () => {
+    const fetchMock = mockFetchJson("[]");
+    await listMaterializations("repo-1");
+    expect(firstCall(fetchMock)[0]).toContain("/repositories/repo-1/materializations");
   });
 });
 

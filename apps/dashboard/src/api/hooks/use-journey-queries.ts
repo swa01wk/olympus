@@ -9,13 +9,23 @@ import {
   getDefectRootCause,
   getReadinessAssessment,
   getRecoveryProposals,
+  getRepository,
   getReviewQueue,
   listChangeRequests,
   listDefectReproductions,
   listDefects,
+  listMaterializations,
   listObservedBehaviors,
+  listProjectRepositories,
 } from "@/src/api/resources";
+import type { RepositoryStatus } from "@/src/api/types/repository";
 import { useQuery } from "@tanstack/react-query";
+
+function repositoryPollMs(status: RepositoryStatus | undefined): number | false {
+  if (!status) return false;
+  if (status === "READY" || status === "ERROR") return false;
+  return 3000;
+}
 
 export function useChangeRequests(projectId: string | undefined) {
   return useQuery({
@@ -114,5 +124,34 @@ export function useReadinessAssessment(cycleId: string | undefined) {
     queryKey: queryKeys.journey.readiness(cycleId ?? ""),
     queryFn: () => getReadinessAssessment(cycleId!),
     enabled: Boolean(cycleId),
+  });
+}
+
+export function useProjectRepositories(projectId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.repositories.list(projectId ?? ""),
+    queryFn: () => listProjectRepositories(projectId!),
+    enabled: Boolean(projectId),
+  });
+}
+
+export function useRepository(repositoryId: string | undefined, opts?: { poll?: boolean }) {
+  const poll = opts?.poll ?? true;
+  return useQuery({
+    queryKey: queryKeys.repositories.detail(repositoryId ?? ""),
+    queryFn: () => getRepository(repositoryId!),
+    enabled: Boolean(repositoryId),
+    refetchInterval: (q) =>
+      poll && repositoryId && q.state.data?.status
+        ? repositoryPollMs(q.state.data.status)
+        : false,
+  });
+}
+
+export function useRepositoryMaterializations(repositoryId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.repositories.materializations(repositoryId ?? ""),
+    queryFn: () => listMaterializations(repositoryId!),
+    enabled: Boolean(repositoryId),
   });
 }

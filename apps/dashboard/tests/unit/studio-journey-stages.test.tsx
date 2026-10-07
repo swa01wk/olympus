@@ -60,6 +60,18 @@ vi.mock("@/src/api/hooks/use-journey-queries", () => ({
     isLoading: false,
     isError: false,
   }),
+  useRepository: () => ({
+    data: {
+      id: "repo-1",
+      provider: "GITHUB",
+      remote_url: "https://github.com/org/app.git",
+      default_branch: "main",
+      canonical_commit: "sha1",
+      registered_sha: "sha1",
+      status: "READY",
+    },
+    isLoading: false,
+  }),
   useRecoveryProposals: () => ({ data: { proposals: [] }, isLoading: false }),
   useReviewQueue: () => ({ data: [], isLoading: false }),
   useReadinessAssessment: () => ({ data: null, isLoading: false }),
@@ -117,7 +129,13 @@ describe("journey stage views", () => {
     wrap(
       <StageWorkspace
         projectId="proj-1"
-        cycle={{ ...base, id: "cyc-bf", type: "BROWNFIELD_ONBOARDING", state: "RECON" }}
+        cycle={{
+          ...base,
+          id: "cyc-bf",
+          type: "BROWNFIELD_ONBOARDING",
+          state: "RECON",
+          repository_id: "repo-1",
+        }}
         stage="RECON"
         inbox={[]}
       />,

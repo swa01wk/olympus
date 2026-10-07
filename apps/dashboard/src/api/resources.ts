@@ -19,6 +19,7 @@ import type {
   VerificationObligation,
 } from "@/src/api/types/core";
 import type { OrchestratorSession } from "@/src/api/types/orchestrator";
+import type { MaterializationAttempt, Repository } from "@/src/api/types/repository";
 import type {
   BrownfieldDiscovery,
   ChangeInterpretation,
@@ -164,6 +165,18 @@ export function fetchProjectCoverage(projectId: string) {
 
 export function fetchProjectRepository(projectId: string) {
   return apiRequest<Record<string, unknown>>(`/views/projects/${projectId}/repository`);
+}
+
+export function listProjectRepositories(projectId: string) {
+  return apiRequest<Repository[]>(`/projects/${projectId}/repositories`);
+}
+
+export function getRepository(repositoryId: string) {
+  return apiRequest<Repository>(`/repositories/${repositoryId}`);
+}
+
+export function listMaterializations(repositoryId: string) {
+  return apiRequest<MaterializationAttempt[]>(`/repositories/${repositoryId}/materializations`);
 }
 
 export function fetchTaskContract(taskId: string) {

@@ -118,7 +118,13 @@ export function StageWorkspace({
     case "BROWNFIELD_ONBOARDING":
       switch (stage) {
         case "RECON":
-          return <BrownfieldReconStage projectId={projectId} cycleId={cycleId} />;
+          return (
+            <BrownfieldReconStage
+              projectId={projectId}
+              cycleId={cycleId}
+              repositoryId={cycle.repository_id}
+            />
+          );
         case "CODE_INDEX":
           return <BrownfieldCodeIndexStage projectId={projectId} cycleId={cycleId} />;
         case "RECOVERED_SPEC":

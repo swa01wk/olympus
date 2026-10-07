@@ -26,4 +26,18 @@ describe("status adapter", () => {
     expect(p.label).toBeTruthy();
     expect(p.tone).toBe("neutral");
   });
+
+  it("maps release ELIGIBLE to pass tone", () => {
+    const p = mapBackendStatus("ELIGIBLE");
+    expect(p.uiKey).toBe("eligible");
+    expect(p.tone).toBe("success");
+    expect(p.glyph).toBe("✓");
+  });
+
+  it("maps release NOT_ELIGIBLE to blocked tone", () => {
+    const p = mapBackendStatus("NOT_ELIGIBLE");
+    expect(p.uiKey).toBe("blocked");
+    expect(p.tone).toBe("attention");
+    expect(p.glyph).toBe("⊘");
+  });
 });

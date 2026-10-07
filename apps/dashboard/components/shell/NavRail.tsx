@@ -20,7 +20,12 @@ export function NavRail({
 }) {
   const pathname = usePathname();
 
-  const isActive = (screen: ScreenId | "INT" | "AUD") => {
+  const studioPath = `/projects/${projectId}/cycles/${cycleId}/studio`;
+
+  const isActive = (screen: ScreenId | "INT" | "AUD" | "STU") => {
+    if (screen === "STU") {
+      return pathname === studioPath || pathname.startsWith(`${studioPath}/`);
+    }
     if (screen === "S02") {
       return (
         pathname === `/projects/${projectId}/cycles/${cycleId}` ||
@@ -62,6 +67,15 @@ export function NavRail({
     <nav className="ol-rail" aria-label="Workspace">
       {item("S01")}
       {item("S02")}
+      <Link
+        href={studioPath}
+        className={cn("ol-rail-i", isActive("STU") && "is-on")}
+        aria-current={isActive("STU") ? "page" : undefined}
+        title="Studio · chat and workspace"
+      >
+        <span className="ol-rail-mono">STU</span>
+        <span className="ol-rail-t">Studio</span>
+      </Link>
       <div className="ol-rail-div" aria-hidden="true">
         <span>drill</span>
       </div>

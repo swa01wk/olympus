@@ -114,6 +114,23 @@ export type ControlPlaneSummaryView = {
   release: { eligible: boolean | null };
 };
 
+export type InboxApprovalNested = {
+  id: string;
+  key: string;
+  approval_type: string;
+  subject_type: string;
+  subject_id: string;
+  subject_hash: string;
+  status: string;
+};
+
+export type InboxClarificationNested = {
+  id: string;
+  key: string;
+  question: string;
+  status: string;
+};
+
 export type InboxItem = {
   kind: string;
   id: string;
@@ -121,6 +138,8 @@ export type InboxItem = {
   why?: string;
   project_id?: string;
   delivery_cycle_id?: string | null;
+  approval?: InboxApprovalNested;
+  clarification?: InboxClarificationNested;
 };
 
 export type DomainEventPayload = {

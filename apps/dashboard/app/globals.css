@@ -4,6 +4,7 @@
 @import "../styles/primitives.css";
 @import "../styles/map.css";
 @import "../styles/dialogs.css";
+@import "../styles/studio.css";
 
 @theme inline {
   --color-bg: var(--bg);

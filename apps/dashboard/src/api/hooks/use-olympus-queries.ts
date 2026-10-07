@@ -100,12 +100,15 @@ export function useControlPlaneSummary(cycleId: string | undefined) {
   });
 }
 
-export function useInbox() {
-  return useQuery({ queryKey: queryKeys.inbox, queryFn: fetchInbox });
+export function useInbox(params?: { projectId?: string; cycleId?: string }) {
+  return useQuery({
+    queryKey: queryKeys.inbox(params),
+    queryFn: () => fetchInbox(params),
+  });
 }
 
 export function useAttentionQueue(cycleId?: string) {
-  const inbox = useInbox();
+  const inbox = useInbox(cycleId ? { cycleId } : undefined);
   return useMemo(() => {
     const rows = (inbox.data ?? []).filter(
       (item) => !cycleId || item.delivery_cycle_id === cycleId || item.delivery_cycle_id == null,
@@ -234,6 +237,8 @@ export function useDeliveryCycleCommandMutation(cycleId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.cycles.detail(cycleId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.cycles.overview(cycleId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.cycles.controlPlane(cycleId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cycles.transitions(cycleId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.inboxRoot });
     },
   });
 }

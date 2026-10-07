@@ -1,6 +1,8 @@
 "use client";
 
+import { Button } from "@/components/primitives";
 import { LifecycleRibbon } from "@/components/cycle/LifecycleRibbon";
+import Link from "next/link";
 import { RemediationCycleNotice } from "@/components/truth/RemediationCycleNotice";
 import { journeyDirection, journeyLabel } from "@/lib/journey-labels";
 import { isNegativeTerminal, isTerminalCycleState, terminalConsequence } from "@/lib/cycle-terminal";
@@ -8,7 +10,13 @@ import { ExceptionState } from "@/components/truth/ExceptionState";
 import type { DeliveryCycle } from "@/src/api/types/core";
 import { ribbonStages, stageIndex, stagesForCycleType } from "@/src/control-plane/stage-lanes";
 
-export function CycleHeader({ cycle }: { cycle: DeliveryCycle }) {
+export function CycleHeader({
+  cycle,
+  projectId,
+}: {
+  cycle: DeliveryCycle;
+  projectId?: string;
+}) {
   const stages = ribbonStages(cycle.type, cycle.state);
   const idx = stageIndex(cycle.type, cycle.state);
   const currentIdx = idx >= 0 ? idx : stages.length - 1;
@@ -36,9 +44,16 @@ export function CycleHeader({ cycle }: { cycle: DeliveryCycle }) {
             <span>State: {cycle.state}</span>
           </div>
         </div>
-        <div className="ol-stagechip">
-          <span className="ol-label">Stage</span>
-          {allStages[currentIdx]?.laneCode ?? "—"} · {cycle.state}
+        <div className="ol-ch-r">
+          <div className="ol-stagechip">
+            <span className="ol-label">Stage</span>
+            {allStages[currentIdx]?.laneCode ?? "—"} · {cycle.state}
+          </div>
+          {projectId && (
+            <Button asChild variant="quiet" className="ol-ch-studio-link">
+              <Link href={`/projects/${projectId}/cycles/${cycle.id}/studio`}>Open studio</Link>
+            </Button>
+          )}
         </div>
       </div>
       <LifecycleRibbon stages={stages} currentIndex={currentIdx} terminalState={cycle.state} />

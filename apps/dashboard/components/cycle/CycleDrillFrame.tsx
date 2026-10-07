@@ -125,7 +125,7 @@ export function CycleDrillFrame({
       laneFlags={laneFlags}
     >
       <div className="ol-screen">
-        <CycleHeader cycle={cycle.data} />
+        <CycleHeader cycle={cycle.data} projectId={projectId} />
         <LaneStrip projectId={projectId} cycleId={cycleId} cycle={cycle.data} activeScreen={activeScreen} />
         <AttentionStrip
           cycle={cycle.data}

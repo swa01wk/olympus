@@ -11,6 +11,31 @@ export type RequestOptions = {
   headers?: Record<string, string>;
 };
 
+export type FormRequestOptions = {
+  idempotencyKey?: string;
+  token?: string | null;
+  signal?: AbortSignal;
+};
+
+/** Multipart POST (e.g. source upload). Do not set Content-Type — fetch adds the boundary. */
+export async function apiFormRequest<T>(
+  path: string,
+  formData: FormData,
+  options: FormRequestOptions = {},
+): Promise<T> {
+  const base = getApiBaseUrl();
+  const url = path.startsWith("http") ? path : `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+  const token = options.token !== undefined ? options.token : getAccessToken();
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  headers["Idempotency-Key"] = options.idempotencyKey ?? newIdempotencyKey();
+  const res = await fetch(url, { method: "POST", headers, body: formData, signal: options.signal });
+  if (!res.ok) throw await errorFromResponse(res);
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const base = getApiBaseUrl();
   const url = path.startsWith("http") ? path : `${base}${path.startsWith("/") ? "" : "/"}${path}`;

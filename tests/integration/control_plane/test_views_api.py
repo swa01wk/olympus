@@ -30,6 +30,13 @@ async def test_inbox_and_overviews_empty_project(api_client: AsyncClient) -> Non
     assert inbox.status_code == 200
     assert isinstance(inbox.json(), list)
 
+    inbox_project = await api_client.get(
+        "/views/inbox",
+        params={"project_id": project_id},
+    )
+    assert inbox_project.status_code == 200
+    assert isinstance(inbox_project.json(), list)
+
     coverage = await api_client.get(f"/views/projects/{project_id}/coverage")
     assert coverage.status_code == 200
 
@@ -40,6 +47,13 @@ async def test_inbox_and_overviews_empty_project(api_client: AsyncClient) -> Non
     )
     assert cycle.status_code == 201
     cycle_id = cycle.json()["id"]
+
+    inbox_cycle = await api_client.get(
+        "/views/inbox",
+        params={"delivery_cycle_id": cycle_id},
+    )
+    assert inbox_cycle.status_code == 200
+    assert isinstance(inbox_cycle.json(), list)
 
     cp = await api_client.get(f"/views/delivery-cycles/{cycle_id}/control-plane")
     assert cp.status_code == 200

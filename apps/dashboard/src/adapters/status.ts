@@ -44,7 +44,7 @@ export const STATUS: Record<string, Omit<StatusPresentation, "uiKey">> = {
   pending: { label: "Pending", tone: "attention", glyph: "‖" },
   rejected: { label: "Rejected", tone: "failure", glyph: "✕" },
   eligible: { label: "Eligible", tone: "success", glyph: "✓" },
-  "not-eligible": { label: "Not eligible", tone: "neutral", glyph: "○" },
+  "not-eligible": { label: "Not eligible", tone: "attention", glyph: "⊘" },
   "approval-pending": { label: "Awaiting approval", tone: "attention", glyph: "‖" },
   released: { label: "Released", tone: "success", glyph: "■" },
   reproduced: { label: "Failure reproduced", tone: "failure", glyph: "✕" },
@@ -96,8 +96,8 @@ const BACKEND_TO_UI: Record<string, string> = {
   // ApprovalStatus
   CHANGES_REQUESTED: "review",
   EXPIRED: "stale",
-  // ReleaseStatus (common)
-  EXECUTED: "released",
+  ELIGIBLE: "eligible",
+  NOT_ELIGIBLE: "blocked",
   // ActionStatus
   REQUESTED: "pending",
   DENIED: "denied",
@@ -116,7 +116,6 @@ const BACKEND_TO_UI: Record<string, string> = {
   WAIVED: "decided",
   // ObligationStatus / evidence
   SATISFIED: "passed",
-  UNSATISFIED: "missing",
   NOT_READY: "not-ready",
 };
 

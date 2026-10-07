@@ -185,7 +185,7 @@ export function CycleMapScreen({ projectId, cycleId }: { projectId: string; cycl
       laneFlags={laneFlags}
     >
       <div className="ol-screen">
-        <CycleHeader cycle={cycle} />
+        <CycleHeader cycle={cycle} projectId={projectId} />
         <AttentionStrip
           cycle={cycle}
           items={attention}

@@ -15,5 +15,10 @@ export default defineConfig({
     url: "http://127.0.0.1:3010",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      NEXT_PUBLIC_OLYMPUS_API_URL:
+        process.env.NEXT_PUBLIC_OLYMPUS_API_URL ?? "http://127.0.0.1:8000",
+    },
   },
 });

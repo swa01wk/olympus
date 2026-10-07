@@ -1,4 +1,10 @@
 import { apiRequest } from "@/src/api/client";
+export {
+  answerClarification,
+  createDeliveryCycle,
+  createOrchestratorSession,
+  postOrchestratorTurn,
+} from "@/src/api/commands";
 import type {
   ControlPlaneSummaryView,
   CycleOverviewView,
@@ -12,6 +18,30 @@ import type {
   TransitionPreview,
   VerificationObligation,
 } from "@/src/api/types/core";
+import type { OrchestratorSession } from "@/src/api/types/orchestrator";
+import type {
+  BrownfieldDiscovery,
+  ChangeInterpretation,
+  ChangeRequestSummary,
+  CycleSpecDelta,
+  DefectDetail,
+  DefectSummary,
+  ObservedBehavior,
+  ReadinessAssessment,
+  ReviewQueueItem,
+} from "@/src/api/types/journey";
+import type {
+  ArchitectureView,
+  Capability,
+  Clarification,
+  Feature,
+  FeatureSpecDetail,
+  FeatureSpecSummary,
+  ImplementationSpecSummary,
+  ProductDecompositionSummary,
+  ProductSourceContent,
+  ProductSourceSummary,
+} from "@/src/api/types/product-model";
 
 export function fetchActorMe() {
   return apiRequest<{ actor_id: string; kind: string; name: string; roles: string[] }>(
@@ -35,9 +65,12 @@ export function fetchDeliveryCycle(cycleId: string) {
   return apiRequest<DeliveryCycle>(`/delivery-cycles/${cycleId}`);
 }
 
-export function fetchNextTransitions(cycleId: string) {
+export function getNextTransitions(cycleId: string) {
   return apiRequest<TransitionPreview[]>(`/delivery-cycles/${cycleId}/next-transitions`);
 }
+
+/** @deprecated Use `getNextTransitions` */
+export const fetchNextTransitions = getNextTransitions;
 
 export function fetchCycleOverview(cycleId: string) {
   return apiRequest<CycleOverviewView>(`/views/delivery-cycles/${cycleId}/overview`);
@@ -51,8 +84,12 @@ export function fetchProjectOverview(projectId: string) {
   return apiRequest<Record<string, unknown>>(`/views/projects/${projectId}/overview`);
 }
 
-export function fetchInbox() {
-  return apiRequest<InboxItem[]>("/views/inbox");
+export function fetchInbox(params?: { projectId?: string; cycleId?: string }) {
+  const search = new URLSearchParams();
+  if (params?.projectId) search.set("project_id", params.projectId);
+  if (params?.cycleId) search.set("delivery_cycle_id", params.cycleId);
+  const qs = search.toString();
+  return apiRequest<InboxItem[]>(`/views/inbox${qs ? `?${qs}` : ""}`);
 }
 
 export function fetchTasks(cycleId: string) {
@@ -86,6 +123,10 @@ export type TaskPlanSummary = {
 
 export function fetchTaskPlans(cycleId: string) {
   return apiRequest<TaskPlanSummary[]>(`/delivery-cycles/${cycleId}/task-plans`);
+}
+
+export function listTaskPlans(cycleId: string) {
+  return fetchTaskPlans(cycleId);
 }
 
 export function fetchTaskPlan(planId: string) {
@@ -191,16 +232,62 @@ export function fetchProjectReleases(projectId: string) {
   >(`/projects/${projectId}/releases`);
 }
 
-export function fetchProjectFeatures(projectId: string) {
-  return apiRequest<
-    { id: string; key: string; name: string; capability_id: string; status?: string }[]
-  >(`/projects/${projectId}/features`);
-}
-
 export function fetchCycleKnowledge(cycleId: string) {
   return apiRequest<
     { id: string; class: string; statement: string; source_ref?: string | null }[]
   >(`/delivery-cycles/${cycleId}/knowledge`);
+}
+
+export function listChangeRequests(projectId: string) {
+  return apiRequest<ChangeRequestSummary[]>(`/projects/${projectId}/change-requests`);
+}
+
+export function getChangeInterpretation(cycleId: string) {
+  return apiRequest<ChangeInterpretation>(`/delivery-cycles/${cycleId}/change-interpretation`);
+}
+
+export function getCycleSpecDelta(cycleId: string) {
+  return apiRequest<CycleSpecDelta>(`/delivery-cycles/${cycleId}/spec-delta`);
+}
+
+export function listDefects(projectId: string) {
+  return apiRequest<DefectSummary[]>(`/projects/${projectId}/defects`);
+}
+
+export function getDefect(defectId: string) {
+  return apiRequest<DefectDetail>(`/defects/${defectId}`);
+}
+
+export function listDefectReproductions(defectId: string) {
+  return apiRequest<Record<string, unknown>[]>(`/defects/${defectId}/reproductions`);
+}
+
+export function getDefectRootCause(defectId: string) {
+  return apiRequest<Record<string, unknown>>(`/defects/${defectId}/root-cause`);
+}
+
+export function getBrownfieldDiscovery(cycleId: string) {
+  return apiRequest<BrownfieldDiscovery>(`/delivery-cycles/${cycleId}/discovery`);
+}
+
+export function listObservedBehaviors(cycleId: string, kind?: string) {
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+  return apiRequest<ObservedBehavior[]>(`/delivery-cycles/${cycleId}/observed-behaviors${q}`);
+}
+
+export function getRecoveryProposals(cycleId: string) {
+  return apiRequest<{ proposals: Record<string, unknown>[] }>(
+    `/delivery-cycles/${cycleId}/recovery`,
+  );
+}
+
+export function getReviewQueue(cycleId: string) {
+  return apiRequest<ReviewQueueItem[]>(`/delivery-cycles/${cycleId}/review-queue`);
+}
+
+export function getReadinessAssessment(cycleId: string, recompute = false) {
+  const q = recompute ? "?recompute=true" : "";
+  return apiRequest<ReadinessAssessment | null>(`/delivery-cycles/${cycleId}/readiness${q}`);
 }
 
 export function fetchFeatureLineage(featureId: string) {
@@ -238,6 +325,62 @@ export function fetchAuditVerify(projectId?: string) {
   }>(`/audit/verify${q}`);
 }
 
+export function listSources(projectId: string) {
+  return apiRequest<ProductSourceSummary[]>(`/projects/${projectId}/sources`);
+}
+
+export function getSourceContent(projectId: string, sourceId: string) {
+  return apiRequest<ProductSourceContent>(`/projects/${projectId}/sources/${sourceId}/content`);
+}
+
+export function listCapabilities(projectId: string) {
+  return apiRequest<Capability[]>(`/projects/${projectId}/capabilities`);
+}
+
+export function listFeatures(projectId: string) {
+  return apiRequest<Feature[]>(`/projects/${projectId}/features`);
+}
+
+/** Alias for existing dashboard usage. */
+export const fetchProjectFeatures = listFeatures;
+
+export function listFeatureSpecs(featureId: string) {
+  return apiRequest<FeatureSpecSummary[]>(`/features/${featureId}/specs`);
+}
+
+export function getFeatureSpec(specId: string) {
+  return apiRequest<FeatureSpecDetail>(`/specs/${specId}`);
+}
+
+export function listDecompositions(cycleId: string) {
+  return apiRequest<ProductDecompositionSummary[]>(
+    `/delivery-cycles/${cycleId}/decompositions`,
+  );
+}
+
+export function listClarifications(status?: string) {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest<Clarification[]>(`/clarifications${q}`);
+}
+
+export function getProjectArchitecture(projectId: string) {
+  return apiRequest<ArchitectureView>(`/projects/${projectId}/architecture`);
+}
+
+export function listImplementationSpecs(featureSpecId: string) {
+  return apiRequest<ImplementationSpecSummary[]>(
+    `/features/${featureSpecId}/implementation-specs`,
+  );
+}
+
+export function getTaskDag(cycleId: string) {
+  return fetchTaskDag(cycleId);
+}
+
+export function getApproval(approvalId: string) {
+  return fetchApproval(approvalId);
+}
+
 export function fetchApproval(approvalId: string) {
   return apiRequest<{
     id: string;
@@ -263,50 +406,32 @@ export function fetchClarification(clarificationId: string) {
   }>(`/clarifications/${clarificationId}`);
 }
 
-export function answerClarification(clarificationId: string, answer: string) {
-  return apiRequest<Record<string, unknown>>(`/clarifications/${clarificationId}/answer`, {
-    method: "POST",
-    body: { answer },
-  });
-}
-
-export function createDeliveryCycle(
-  projectId: string,
-  body: { type: string; objective: string; repository_id?: string | null },
-  idempotencyKey?: string,
-) {
-  return apiRequest<DeliveryCycle>(`/projects/${projectId}/delivery-cycles`, {
-    method: "POST",
-    body,
-    idempotencyKey,
-  });
-}
-
-export function createOrchestratorSession(body: {
-  project_id?: string | null;
-  delivery_cycle_id?: string | null;
-}) {
-  return apiRequest<{
-    id: string;
-    project_id: string | null;
-    delivery_cycle_id: string | null;
-    turns: { role: string; text: string; execution_id?: string }[];
-    expires_at: string;
-  }>("/orchestrator/sessions", { method: "POST", body });
-}
-
-export function postOrchestratorTurn(sessionId: string, message: string) {
-  return apiRequest<{ execution_id: string }>(`/orchestrator/sessions/${sessionId}/turns`, {
-    method: "POST",
-    body: { message },
-  });
-}
-
 export function fetchOrchestratorSession(sessionId: string) {
+  return apiRequest<OrchestratorSession>(`/orchestrator/sessions/${sessionId}`);
+}
+
+export function getRelease(releaseId: string) {
   return apiRequest<{
     id: string;
-    turns: { role: string; text: string; execution_id?: string; message?: string }[];
-  }>(`/orchestrator/sessions/${sessionId}`);
+    key: string;
+    project_id: string;
+    delivery_cycle_id: string;
+    integrated_sha: string;
+    status: string;
+    manifest_id: string | null;
+    tag: string | null;
+  }>(`/releases/${releaseId}`);
+}
+
+export function getReleaseManifest(releaseId: string) {
+  return apiRequest<{ content: Record<string, unknown>; content_hash: string }>(
+    `/releases/${releaseId}/manifest`,
+  );
+}
+
+/** Alias */
+export function getReleaseEligibility(cycleId: string) {
+  return fetchReleaseEligibility(cycleId);
 }
 
 export function fetchAuditForTarget(targetType: string, targetId: string) {

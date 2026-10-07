@@ -96,8 +96,15 @@ async def ic_assurance_view(
 async def inbox_view(
     session: AsyncSession = Depends(get_db),
     ctx: CommandContext = Depends(command_context),
+    project_id: uuid.UUID | None = Query(None),
+    delivery_cycle_id: uuid.UUID | None = Query(None),
 ) -> list[dict[str, object]]:
-    return await build_inbox_view(session, ctx)
+    return await build_inbox_view(
+        session,
+        ctx,
+        project_id=project_id,
+        delivery_cycle_id=delivery_cycle_id,
+    )
 
 
 @router.get("/delivery-cycles/{cycle_id}/control-plane")

@@ -23,6 +23,62 @@ function stages(entries: [string, string][]): StageLane[] {
   }));
 }
 
+/** Ordered machine states per cycle type (§1). Same order as `STAGE_LANES_BY_TYPE`. */
+export const STAGES_BY_CYCLE_TYPE: Record<DeliveryCycleType, readonly string[]> = {
+  GREENFIELD_BUILD: [
+    "DISCOVERY",
+    "PRODUCT_MODEL",
+    "ARCHITECTURE",
+    "PLANNING",
+    "DEVELOPMENT",
+    "INTEGRATION",
+    "ASSURANCE",
+    "RELEASE",
+    "COMPLETE",
+  ],
+  BROWNFIELD_ONBOARDING: [
+    "RECON",
+    "CODE_INDEX",
+    "RECOVERED_SPEC",
+    "BASELINE",
+    "READINESS",
+    "REMEDIATION",
+    "READY",
+  ],
+  FEATURE_CHANGE: [
+    "INTAKE",
+    "SPEC_DELTA",
+    "IMPACT_ANALYSIS",
+    "PLANNING",
+    "DEVELOPMENT",
+    "INTEGRATION",
+    "ASSURANCE",
+    "RELEASE",
+    "COMPLETE",
+  ],
+  BUG_FIX: [
+    "TRIAGE",
+    "REPRODUCTION",
+    "EXPECTED_BEHAVIOR",
+    "ROOT_CAUSE",
+    "DEVELOPMENT",
+    "INTEGRATION",
+    "REGRESSION",
+    "ASSURANCE",
+    "RELEASE",
+    "COMPLETE",
+  ],
+  REMEDIATION: [
+    "INTAKE",
+    "PLANNING",
+    "DEVELOPMENT",
+    "INTEGRATION",
+    "ASSURANCE",
+    "RELEASE",
+    "COMPLETE",
+  ],
+};
+
 export const STAGE_LANES_BY_TYPE: Record<DeliveryCycleType, StageLane[]> = {
   GREENFIELD_BUILD: stages([
     ["DISCOVERY", "IN"],

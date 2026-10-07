@@ -2207,6 +2207,7 @@ Planning-time source reconciliations are recorded in `plans/README.md` §2 (D-01
 | 2026-10-05 | **Phase 16 COMPLETE:** outbound connectors **16.9–16.13**, §14 **`test_p16_acceptance_criteria`**, **`make verify-phase-16-exit`** green. |
 | 2026-10-05 | **Phase 16 §12 verify (re-run):** **`make test-integrations-p16`** **16/16**, **`make test-connector-live`** **2/2** (compose + **`integrations-seed`**); Makefile loads **`.env`** for connector targets; **`make verify-phase-16-exit`** exit **0**. |
 | 2026-10-05 | **Phase 16 §12 verify:** migration **`0030_p16_integrations`**, OSS compose profile, deterministic + live tests; **`make verify-phase-16-exit`** exit **0**; Phase **16** remains **`IN_PROGRESS`** (§14 ACs, connectors 16.9–16.13, issue-tracker milestone pending). |
+| 2026-10-07 | **Frontend UI track (Olympus Studio):** §16 opened; **C0** hygiene complete (duplicate cleanup, inbox types + `/views/inbox` query filters, SSE resume, status adapter). |
 | 2026-10-01 | Initial plan set created: `plans/README.md`, phases 00–18. |
 | 2026-10-01 | Planning review and completion. Added Phase 19 and this `STATUS.md`. Reconciled cross-phase inconsistencies (each fix is the smallest compatible change):<br>• Phase 18 RC-05 and its startup reconciler now use the Phase 08 IC states (`INTEGRATING` retry on the same IC), not a nonexistent `BUILDING` IC state.<br>• Phase 18 sandbox fallback uses `OLYMPUS_ENV` `local`/`test`, not `dev`.<br>• Phases 16 and 18 compose commands use the root `docker-compose.yml` with `deploy/` overlays.<br>• Phase 15 uses `affected_sha` instead of "released SHA", to support the external-push defect path.<br>• Phase 07 classifies external imports (stdlib / declared dependency / undeclared; TECH §2 "importlib metadata").<br>• Phase 01 adds the `delivery_cycle_events` view (TECH §5.1; README D-15).<br>• README markers add `connector_live` and `ui`, and README §10 aligns with task-group progress tracking. |
 | 2026-10-01 | **Repository materialization tightening (plan-only).** No new phase. README D-16/D-17 and §5.9 already define the ownership split, unified Repository / RepositoryWorkspace / ExecutionWorkspace model, configurable `OLYMPUS_WORKSPACE_ROOT`, Greenfield/Brownfield flows, candidate vs canonical revision and Code Index, connectors and credentials. This change syncs STATUS.md to those plans: Journey Readiness repository dependencies; eight repository/workspace invariants; §8 Repository Model / Workspace Model / Greenfield / Brownfield / Integration / Code Intelligence / Assurance / Release trackers; Phase 00–16 §14 ACs copied from the phase files; Q-11..Q-16 recorded. Phase 00 adds the workspace-root settings AC; Phase 18 RC-12 now backs up `OLYMPUS_WORKSPACE_ROOT`. No production code, migrations or adapters were added. |
@@ -2260,3 +2261,20 @@ Planning-time source reconciliations are recorded in `plans/README.md` §2 (D-01
 | 2026-10-05 | **STATUS sync (Phase 14):** §10 Feature Change invariants + §11 MVP DoD; §10 Live LLM table (`change_interpret`, Forge retry, journey **3**); **`make verify-phase-14`** / **`verify-phase-14-exit`**; Phase **14** deliverables, REST, follow-ups **P14-F01** / **P14-19**, implementation record. |
 | 2026-10-05 | **Phase 15 COMPLETE (exit):** migrations **`0028`–`0029`**; bug-fix kernel + reproduction/regression; journey **`test_bug_fix_supportdesk.py`** live PASS; lint/mypy fixes; **`bootstrap_bug_fix_to_root_cause`** + POST_REPAIR integration chain; sequential **`make migrate/lint/check/typecheck`** green; Phase 15 pytest **13/13**; §1–§2 → **15/20**; Journey 4 milestone **PARTIAL** (isolated; Phase **19** chained pending). |
 | 2026-10-05 | **Phase 15 gap closure + verify sign-off:** bug-fix prompt front matter; **`_snapshot`** in execution snapshots; worker bug-fix **artifact:** outputs; triage signature normalization; duplicate reproduction/evidence hardening; expanded §12 tests (**`live_llm/defects`**, eligibility, **`proceed_unreproduced`**, NOT_REPRODUCED R1, artifact immutability); **`make verify-phase-15-exit`** exit **0** (local). |
+
+---
+
+## 16. FRONTEND UI TRACK (Olympus Studio)
+
+Chat + workspace operator UI in `apps/dashboard` per `docs/design/olympus-chat-workspace-plan.md` and `docs/design/olympus-cursor-prompt-chat-workspace.md`.
+
+| Phase | State | Milestone | Blockers |
+|---|---|---|---|
+| C0 | COMPLETE | Hygiene — duplicate cleanup, inbox types + `/views/inbox` filters, SSE `Last-Event-ID`, release eligibility status | — |
+| C1 | COMPLETE | Studio API layer — stage reads/writes, §6 proposal map, mutation hooks; unit tests per C1 API fn + invalidation | — |
+| C2 | COMPLETE | Studio shell — `/studio` route, three-pane layout + tabs, stage spine, SSE invalidation | — |
+| C3 | COMPLETE | Orchestrator chat — session reuse, async turns, intent UI, PRD attach, AskOlympus drawer | — |
+| C4 | COMPLETE | Greenfield workspace stages — discovery through release, embedded DAG/executions/assurance | — |
+| C5 | COMPLETE | Decision panel + Next step bar — APPROVER gating, guard truth, cycle commands | — |
+| C6 | COMPLETE | Other journeys — feature change, bug fix, brownfield, remediation stage views | — |
+| C7 | COMPLETE | Playwright `studio-greenfield.spec.ts` @live — greenfield studio path vs Control API | — |

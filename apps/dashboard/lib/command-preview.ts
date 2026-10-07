@@ -1,3 +1,7 @@
+export function previewReleaseApprove(releaseId: string, idempotencyKey: string): string {
+  return `POST /releases/${releaseId}/approve · Idempotency-Key=${truncateKey(idempotencyKey)}`;
+}
+
 export function previewApprovalDecision(
   approvalId: string,
   decision: string,
@@ -30,6 +34,27 @@ export function previewCycleCommand(
 
 export function previewOrchestratorTurn(sessionId: string, message: string): string {
   return `POST /orchestrator/sessions/${sessionId}/turns · message=${truncateText(message, 64)}`;
+}
+
+export function previewStudioPost(
+  path: string,
+  body?: Record<string, unknown> | null,
+  idempotencyKey?: string,
+): string {
+  return previewRunnableRoute(path, body ?? null, undefined, idempotencyKey);
+}
+
+export function previewRunnableRoute(
+  path: string,
+  body: Record<string, unknown> | null,
+  query?: Record<string, string>,
+  idempotencyKey?: string,
+): string {
+  const qs = query ? `?${new URLSearchParams(query)}` : "";
+  const bodyHint =
+    body && Object.keys(body).length > 0 ? ` · ${truncateText(JSON.stringify(body), 80)}` : "";
+  const idem = idempotencyKey ? ` · Idempotency-Key=${truncateKey(idempotencyKey)}` : "";
+  return `POST ${path}${qs}${bodyHint}${idem}`;
 }
 
 function truncateKey(key: string): string {

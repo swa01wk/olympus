@@ -60,6 +60,11 @@ Add to `src/api/resources.ts` (reads) and `src/api/commands.ts` (writes), with q
 - Planning (`planning.py`): `proposeArchitecture(cycleId)`, `getProjectArchitecture`, `requestArchitectureApproval(architectureId, cycleId)`, `generateImplementationSpecs(cycleId)`, `listImplementationSpecs(featureId)`, `requestImplementationSpecApproval(specId, cycleId)`, `generateTaskPlan(cycleId)`, `listTaskPlans(cycleId)`, `acceptTaskPlan(planId)`, `getTaskDag(cycleId)`.
 - Approvals (`approvals.py`, `delivery_cycles.py`): `getApproval`, `requestApproval(cycleId, {approval_type, subject_type, subject_id, subject_version, subject_hash})`, `getNextTransitions(cycleId)`.
 - Release (`releases.py`): `createRelease(cycleId)`, `getReleaseEligibility(cycleId)`, `getRelease`, `getReleaseManifest`, `approveRelease(releaseId)`, `executeRelease(releaseId)`.
+- Intake (`projects.py`, `delivery_cycles.py`, `changes.py`, `defects.py`): `createProject({key, name, description?})`, `createDeliveryCycle` (exists), `createChangeRequest(projectId, {title, description, external_ref?})` and `createDefect(projectId, {title, description, external_ref?})` — both return the cycle id they open.
+- Feature Change (`changes.py`, `spec_deltas.py`, `impact.py`): `getChangeInterpretation`, `rerunChangeInterpretation`, `getCycleSpecDelta`, `createSpecDelta(featureId, {from_spec_id?, to_spec_id, delivery_cycle_id})`, `requestSpecDeltaApproval(deltaId)`, `createImpactAssessment(cycleId, {spec_delta_id?, seed_stable_keys?, index_version_id?})`, `getLatestImpactAssessment`, `getStaleness`, `proposeArchitectureDelta(cycleId)`, `declineArchitectureDelta(cycleId, {note})`.
+- Bug Fix (`defects.py`): `getDefect`, `listReproductions`, `getDefectTrace`, `getRootCause`, `proceedUnreproduced(defectId, {reason})`, `rejectDefect(defectId, {reason?})`.
+- Brownfield (`brownfield.py`, `promotion.py`, `readiness.py`, `baselines.py`): `getDiscovery`, `getRecovery`, `listObservedBehaviors`, `getReviewQueue`, `recordPromotionDecision(cycleId, {subject_type, subject_id, decision, note?})`, `getReadiness`, `listBaselines`, `activateBaseline`.
+- Assurance (`assurance.py`, `findings.py`): `listGates(icId)`, `finalizeGate`, `runWarden(icId)`, `runSentinel(icId)`, `listFindings(cycleId)`, `waiveFinding`, `remediateFinding`, `listEvidence(cycleId)`.
 - Orchestrator (`orchestrator.py`): type the full assistant turn: `{ role, text, execution_id?, intent?, proposal?: {command, target_ref, args, rationale} | null, clarification_answer_draft?: {clarification_id, answer} | null }`.
 - `src/api/proposal-routes.ts`: implement the §6 map as a pure function `routeForProposal(proposal, ctx: {projectId, cycleId, cycleState}) → {method, path, body} | {notRunnable: reason}`. `approval.decide` always returns `notRunnable`.
 
@@ -140,12 +145,97 @@ Goal: the same studio for FEATURE_CHANGE, BUG_FIX, BROWNFIELD_ONBOARDING and REM
 
 Add stage views per §5's last paragraph, reading the routers `changes.py`, `spec_deltas.py`, `impact.py`, `defects.py`, `brownfield.py`, `promotion.py`, `readiness.py`, `baselines.py`. Reuse the existing `ImpactScreen`, `TraceabilityScreen`, `CodeIntelligenceScreen` content where it fits. Map SPEC_DELTA, EXPECTED_BEHAVIOR, REPAIR_SPEC, UNREPRODUCED_REPAIR, PROMOTION and READINESS approvals to their stages in the Decision panel.
 
+C7b drives all of these through the UI, so each must exist as a visible action:
+- **Studio intake** (control panel "New"): New project · Greenfield cycle · Brownfield onboarding (pick repository) · Change request (title + description, or attach a `.md`) · Defect (same). After intake, navigate to the new cycle's studio.
+- **Feature Change:** view the interpretation (Re-run), the spec delta (Request approval), the impact assessment, and the architecture delta (Propose / Decline with note).
+- **Bug Fix:** view triage, reproductions, trace and root cause; *Proceed unreproduced* (reason required) and *Reject defect*.
+- **Brownfield:** view discovery, recovery and observed behaviors; work the review queue with a promotion decision per item; view readiness with each failing check.
+- **Assurance (all journeys):** gates with status; *Run Warden* / *Run Sentinel* when not already scheduled; *Finalize gate* when the backend reports it pending; findings with *Waive* (creates a FINDING_WAIVER approval) and *Remediate*.
+
 Acceptance: each cycle type's spine renders with no "unknown stage" fallback; each new stage view has a component test.
 
-## C7 — End-to-end
+## C7 — End-to-end: the studio proves the four-journey MVP
 
-Goal: prove the studio against the real backend.
+Goal: a green C7 means the frontend and backend are integrated. It has two parts. C7a runs on every PR and catches contract drift. C7b drives the backend's own Phase 19 acceptance run (all four journeys on one project) entirely through the studio, then checks it with the backend's own acceptance evaluator.
 
-Playwright spec `tests/e2e/studio-greenfield.spec.ts` against a running control API (`NEXT_PUBLIC_OLYMPUS_API_URL`) with two tokens (operator; operator+approver). Steps: create project and Greenfield cycle → upload `tests/fixtures/supportdesk/PRD.md` (repo root) from the composer → decompose → see features → edit one spec (new version) → request scope approval → as approver Request changes with a note → request again → Approve → Next step bar enables `start_architecture`. Then send a chat message and assert an assistant turn appears. Tag `@live`; skip when the API is unreachable.
+Reference implementation to mirror: `tests/journey/chained/runner.py` (journey order and inputs), `tests/journey/chained/assertions.py` (terminal state), `scripts/acceptance/evaluate_mvp.py` (acceptance checks), and the inputs in `tests/fixtures/supportdesk/`. Read them before writing C7b.
 
-Acceptance: the spec passes locally against `make db-up && make migrate && uvicorn apps.control_api.main:app` with workers running.
+Important difference: the backend's own journey tests take service-layer shortcuts for some steps (they call Python services and seed rows directly). C7b may not. **Every operator and human action goes through the studio UI, which goes through HTTP.** If a step has no HTTP route, that is a finding, not something to work around (rule 5 below).
+
+### C7a — Contract gate (deterministic; runs on every PR)
+
+1. `apps/dashboard/scripts/export-openapi.sh`: from the repo root, run
+   `OLYMPUS_ENV=test DATABASE_URL=postgresql+psycopg://x:x@localhost/x uv run python -c "import json; from apps.control_api.main import create_app; print(json.dumps(create_app().openapi(), indent=1, sort_keys=True))" > apps/dashboard/tests/contract/openapi.json`
+   Commit `openapi.json`. No database is needed; `create_app()` only connects inside its lifespan.
+2. `src/api/contract-manifest.ts`: one entry per client function from C1 — `{ fn, method, pathTemplate, sampleBody?, sampleQuery? }`. Path templates use the backend's parameter names (`/delivery-cycles/{cycle_id}/…`).
+3. `tests/contract/api-contract.test.ts` (vitest), failing when:
+   - a manifest `method + pathTemplate` is not in `openapi.json`;
+   - a manifest entry is missing for any function exported from `src/api/resources.ts` or `src/api/commands.ts`;
+   - `sampleBody` has a key the request schema does not define, or lacks a key the schema marks `required` (for routes whose OpenAPI request schema is a model; routes that read raw JSON show no schema and are listed in an explicit allow-list with a comment pointing to the router line);
+   - the TS unions for `DeliveryCycleType`, `ApprovalType` and `ApprovalStatus` differ from the enums in `openapi.json`.
+4. Add `npm run test:contract` and include it in `npm run check`. When the backend changes, re-export `openapi.json` in the same PR.
+
+Acceptance: deliberately renaming one path in the manifest fails the test with the path in the message; restoring it passes.
+
+### C7b — Live four-journey run through the studio (sign-off lane)
+
+**Stack** (document it in `apps/dashboard/tests/e2e/README.md`):
+- `make mvp-env` (runs `scripts/demo/bootstrap.sh`), or by hand: `make db-up && make migrate`; `uvicorn apps.control_api.main:app`; `python -m apps.scheduler_worker.main`; `python -m apps.execution_worker.main`.
+- `OLYMPUS_ENV=journey`, a live LLM key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`) and `LLM_TEST_BUDGET_USD`. The backend has no fake provider for a running stack; agent stages need a real model.
+- Tokens: `uv run python -m apps.control_api.cli.seed_actor --name ui-operator --roles OPERATOR` → `OLYMPUS_OPERATOR_TOKEN`; `… --name ui-approver --roles OPERATOR,APPROVER` → `OLYMPUS_APPROVER_TOKEN`.
+- Dashboard: `NEXT_PUBLIC_OLYMPUS_API_URL` → the control API. Playwright `baseURL` → the dashboard.
+
+**Rules**
+1. Playwright performs every operator and human action by using the studio: clicks, typing, file attach, Decision panel, Next step bar, proposal cards. No `request.post` for mutations.
+2. Direct API calls from the spec are allowed only for reads: to assert, and to wait for agent work (`/next-transitions`, `/views/delivery-cycles/{id}/overview`, stage lists).
+3. No database access and no backend Python helpers. The spec never imports from `tests/` or calls `seed_*`.
+4. Two browser contexts, set via `localStorage["olympus_api_token"]`. The **operator** context drives the cycle. The **approver** context decides every approval. Each time an approval appears, first assert the operator context shows the Decision panel read-only with the APPROVER message.
+5. If a step cannot be done in the studio because the backend has no HTTP route for it, fail with `BACKEND_GAP: <step>`. Add the gap to §3 of `olympus-chat-workspace-plan.md` and to `STATUS.md` §16, and stop. Do not seed, patch or skip.
+6. Waiting on agent work: wait on UI state (spine status, workspace records), not sleeps. Per-stage timeout from `STUDIO_E2E_STAGE_TIMEOUT_MS` (default 15 min). On timeout, attach to the report: the last `next-transitions` (every guard with its reasons), the last 50 cycle events, and a screenshot.
+7. Inputs come from the backend fixtures: PRD `tests/fixtures/supportdesk/PRD.md`; clarification answers by keyword from `tests/fixtures/supportdesk/clarification_answers.yaml`; approval notes from `tests/fixtures/supportdesk/chained/approvals.yaml`; brownfield promotion choices from `tests/fixtures/supportdesk/brownfield_review.yaml`; change request `tests/fixtures/supportdesk/change_priority.md`; defect `tests/fixtures/supportdesk/defect_closed_update.md`.
+8. Resumable: one Playwright file per journey, run serially, sharing `var/olympus/ui-e2e/<RUN_ID>.json` (`project_id`, cycle ids, tokens' actor names). `STUDIO_E2E_RUN_ID=<id>` resumes from the first incomplete journey.
+9. Chat is checked at least once per journey: send a question about the current blocker. Assert an assistant turn arrives (event or polling) and that the transcript shows no `system: scheduled` rows. If the turn is `PROPOSE_COMMAND`, assert the card's preview equals `routeForProposal` for that proposal. Do not assert a specific intent or wording; the model's output varies.
+
+**Journeys** (one project; key `SUPPORTDESK-UI-<RUN_ID>`, because the evaluator requires the `SUPPORTDESK` prefix)
+
+`tests/e2e/studio/01-greenfield.spec.ts` — DC-001 → R1
+1. Create the project and a GREENFIELD_BUILD cycle from the studio intake. Wait until the repository is READY (guard `repository_ready_with_canonical_commit` no longer failing).
+2. DISCOVERY: attach `PRD.md` in the composer → Decompose → `start_product_modeling`.
+3. PRODUCT_MODEL: answer every open clarification. Open one feature spec, edit it and save a new version. Request scope approval.
+4. **Human-in-the-loop deviation:** approver chooses *Request changes* with a note → operator edits the spec again and re-requests → approver *Approves*. Assert the first approval's subject hash differs from the second's.
+5. `start_architecture` → Propose architecture → Request approval → approver *Rejects* with a note → operator proposes again → Request approval → approver *Approves* → `start_planning`.
+6. PLANNING: Generate implementation specs → request approval for each → approver approves each. Generate task plan → Accept plan → `start_development`.
+7. DEVELOPMENT: wait for all code tasks to complete (watch the task DAG). If a governed action needs an ACTION approval, approver decides it in the Decision panel. Then `start_integration`.
+8. INTEGRATION → `start_assurance`. Warden and Sentinel are scheduled automatically by default policy. If neither starts within the stage timeout, trigger them from the assurance view. Waive or remediate findings only through the workspace, using an approval for waivers. Then `start_release` once `required_gates_pass` holds.
+9. RELEASE: Create release → approver approves (manifest hash shown) → Execute → `complete`.
+10. Assert, via the API: cycle `COMPLETE`; release `R1` `RELEASED` with `integrated_sha`.
+
+`tests/e2e/studio/02-brownfield.spec.ts` — DC-002 → READY_FOR_CHANGE
+1. Create a BROWNFIELD_ONBOARDING cycle on the project's repository.
+2. `start_code_index` → wait for the index → `start_spec_recovery` → wait for the recovery proposal → `start_baseline`.
+3. Work the review queue in the workspace. Record promotion decisions per `brownfield_review.yaml`; the approver decides any PROMOTION approvals. Then `start_readiness`.
+4. If readiness fails as remediable: `start_remediation`, let it complete, `reassess_readiness`. Repeat until it passes or the stage timeout is reached.
+5. `declare_ready` (approver decides a READINESS approval if one is requested).
+6. Assert: cycle `READY`; project `readiness_state` `READY_FOR_CHANGE`.
+
+`tests/e2e/studio/03-feature-change.spec.ts` — DC-003 → R2
+1. Studio intake → *Change request* with the title and body of `change_priority.md` (`POST /projects/{p}/change-requests`). Open the cycle it returns.
+2. `start_spec_delta` → wait for the interpretation and spec delta → Request approval → approver approves → `start_impact_analysis`.
+3. Wait for the impact assessment and review it in the workspace. Resolve the architecture delta (propose and approve it, or decline it with a note) → `start_planning`.
+4. Same as Greenfield steps 6–9 → release `R2`.
+5. Assert: cycle `COMPLETE`; `R2` `RELEASED`.
+
+`tests/e2e/studio/04-bug-fix.spec.ts` — DC-004 → R3
+1. Studio intake → *Defect* with the title and description of `defect_closed_update.md` (`POST /projects/{p}/defects`). Open the cycle it returns (it starts at TRIAGE).
+2. Wait for triage → `start_reproduction`. If the reproduction is not recorded within the timeout, use *Proceed unreproduced* with a reason; the approver decides the UNREPRODUCED_REPAIR approval.
+3. `resolve_expected_behavior` → approver decides the EXPECTED_BEHAVIOR approval → `start_root_cause`.
+4. Wait for root cause and the repair spec → approver approves REPAIR_SPEC → accept the task plan → `start_development`.
+5. Development → `start_integration` → `start_regression` → wait for reproduction and regression to pass → `start_assurance` → release as in Greenfield steps 8–9 → `R3`.
+6. Assert: cycle `COMPLETE`; `R3` `RELEASED`.
+
+**Final acceptance** (`tests/e2e/studio/global-teardown.ts`, only when all four journeys passed):
+run `uv run python scripts/acceptance/evaluate_mvp.py --project <project_id> --run-id <RUN_ID> --out var/olympus/reports` with `OLYMPUS_HUMAN_TOKEN=$OLYMPUS_APPROVER_TOKEN`. Fail the run if any check fails, and attach the generated `mvp_acceptance_<RUN_ID>.md` to the Playwright report. The evaluator checks, among others: project key, R1/R2/R3 released, four cycles terminal, project READY_FOR_CHANGE, live LLM used, no blocking findings, audit chain valid, LLM spend within budget.
+
+Scripts: `npm run test:e2e:studio` (all four, serial), `npm run test:e2e:studio -- --grep greenfield` (one journey). Tag `@live`; skip with a clear message when the API or LLM key is missing.
+
+Acceptance: on a clean database, `npm run test:e2e:studio` passes all four journeys and the evaluator reports every check passed. Commit the evaluator report path and the Playwright report summary to `STATUS.md` §16. Any `BACKEND_GAP` is listed there with the step that hit it.

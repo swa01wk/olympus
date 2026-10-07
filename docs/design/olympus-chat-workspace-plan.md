@@ -72,6 +72,9 @@ Transitions: `POST /delivery-cycles/{id}/commands/{command}` with `{expected_sta
 | B-05 | `ApprovalResponse` omits `decision_note`, `decided_by_actor_id`, `decided_at`, `created_at`; `GET /approvals` has no project/cycle filter. | Pending: use `/views/inbox?delivery_cycle_id=`. History: `GET /audit?target_type=approval&target_id=`. |
 | B-06 | No endpoint lists orchestrator sessions for a cycle. | Client keeps the session id (F-03). |
 
+**Note on the backend's own journey tests.** `tests/journey/*` and the Phase 19 chained run (`tests/journey/chained/runner.py`) drive several steps through Python services and seeded rows rather than HTTP: brownfield cycle creation and promotion, some approvals, architecture and implementation-spec seeding in the deterministic lane. So a passing backend journey does not prove every human step is reachable over HTTP. C7b closes that gap by doing every step through the studio; any step that turns out to have no route is recorded here as a new B-gap.
+The backend also has no fake model provider for a running stack (`MODEL_PROVIDER` is `anthropic` or `openai`; `FakeProvider` is in-process and test-only), so C7b needs a live LLM key, like the backend's Phase 19 run.
+
 ---
 
 ## 4. The concept
@@ -186,4 +189,7 @@ Run in order. Each phase ends with `npm run check` green and the listed acceptan
 
 **C6 — Other journeys.** Feature Change, Bug Fix and Brownfield spines and stage views per §5's last paragraph.
 
-**C7 — E2E.** Playwright against a live control API: Greenfield DISCOVERY → PLANNING through the studio, including one REJECTED and one CHANGES_REQUESTED decision.
+**C7 — End-to-end proof.** A green C7 means frontend and backend are integrated.
+- *C7a, contract gate (every PR):* the backend's OpenAPI spec is exported into the dashboard; a test fails if any client call, request body or shared enum drifts from it.
+- *C7b, live four-journey run (sign-off):* the backend's Phase 19 acceptance run, driven entirely through the studio on one project: Greenfield → R1, Brownfield → READY_FOR_CHANGE, Feature Change → R2, Bug Fix → R3. Every operator and human action goes through the UI, a separate approver decides every gate (including one *Request changes* and one *Reject*), and chat is exercised in each journey. It ends by running the backend's own `scripts/acceptance/evaluate_mvp.py` on the project; every check must pass.
+*Accept:* `npm run test:e2e:studio` and the evaluator both pass on a clean database with live workers and a live LLM key. Full detail: C7 in `olympus-cursor-prompt-chat-workspace.md`.

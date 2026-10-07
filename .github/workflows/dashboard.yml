@@ -1,0 +1,47 @@
+name: Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/dashboard/**"
+      - ".github/workflows/dashboard.yml"
+      - "docs/ui-implementation/**"
+  pull_request:
+    paths:
+      - "apps/dashboard/**"
+      - ".github/workflows/dashboard.yml"
+      - "docs/ui-implementation/**"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: apps/dashboard
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run check
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run test:e2e

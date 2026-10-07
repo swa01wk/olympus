@@ -1,41 +1,38 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 @import "tailwindcss";
-
-:root {
-  --background: #0b0d10;
-  --foreground: #e6e8eb;
-  --surface: #12151a;
-  --raised: #181c22;
-  --border: #262b33;
-  --muted: #8b93a1;
-}
+@import "../styles/tokens.css";
+@import "../styles/primitives.css";
+@import "../styles/map.css";
+@import "../styles/dialogs.css";
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-border: var(--border);
+  --color-active: var(--active);
+  --color-success: var(--success);
+  --color-attention: var(--attention);
+  --color-failure: var(--failure);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
-  font-size: 13px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse {
-    animation: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
-}
-
-/* React Flow — dark forge theme */
-.react-flow {
-  --xy-node-background-color: #181c22;
-  --xy-node-border-default: #262b33;
-  --xy-node-color: #e6e8eb;
-  --xy-edge-stroke-default: #4b5563;
-  --xy-background-color: #0b0d10;
-  --xy-controls-button-background-color: #12151a;
-  --xy-controls-button-color: #e6e8eb;
 }

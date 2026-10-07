@@ -1,18 +1,10 @@
-"use client";
+import { ExecutionDetailScreen } from "@/components/screens/ExecutionDetailScreen";
 
-import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
-import { ExecutionWorkspace } from "@/components/execution/ExecutionWorkspace";
-import { getServices } from "@/lib/api/services";
-import { qk } from "@/lib/query/keys";
-
-export default function ExecutionPage() {
-  const { executionId } = useParams<{ executionId: string }>();
-  const execQ = useQuery({
-    queryKey: qk.execution(executionId),
-    queryFn: async () => (await getServices()).executions.get(executionId),
-  });
-
-  if (!execQ.data) return <p>Loading…</p>;
-  return <ExecutionWorkspace execution={execQ.data} />;
+export default async function ExecutionPage({
+  params,
+}: {
+  params: Promise<{ executionId: string }>;
+}) {
+  const { executionId } = await params;
+  return <ExecutionDetailScreen executionId={executionId} />;
 }

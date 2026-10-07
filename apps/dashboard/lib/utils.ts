@@ -5,10 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function newCorrelationId(): string {
-  return crypto.randomUUID();
-}
-
 export function newIdempotencyKey(): string {
   return crypto.randomUUID();
 }

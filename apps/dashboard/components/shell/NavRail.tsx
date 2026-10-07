@@ -1,41 +1,88 @@
 "use client";
 
+import { screenHref } from "@/lib/nav-hrefs";
+import { presentationForUiKey } from "@/src/adapters/status";
+import { SCREENS, type LaneId, type ScreenId } from "@/src/control-plane/lanes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { projectNav } from "./nav-config";
 import { cn } from "@/lib/utils";
 
-export function NavRail({ projectId, cycleId }: { projectId: string; cycleId: string | null }) {
+const DRILL_SCREENS: ScreenId[] = ["S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10"];
+
+export function NavRail({
+  projectId,
+  cycleId,
+  laneFlags,
+}: {
+  projectId: string;
+  cycleId: string;
+  laneFlags?: Partial<Record<LaneId, string>>;
+}) {
   const pathname = usePathname();
-  const groups = projectNav(projectId, cycleId);
+
+  const isActive = (screen: ScreenId | "INT" | "AUD") => {
+    if (screen === "S02") {
+      return (
+        pathname === `/projects/${projectId}/cycles/${cycleId}` ||
+        pathname === `/projects/${projectId}/cycles/${cycleId}/`
+      );
+    }
+    const href = screenHref(screen, projectId, cycleId);
+    const base = href.split("?")[0];
+    return pathname === href || pathname.startsWith(base);
+  };
+
+  const item = (screen: ScreenId) => {
+    const s = SCREENS.find((x: (typeof SCREENS)[number]) => x.id === screen)!;
+    const flag = s.lane ? laneFlags?.[s.lane as LaneId] : undefined;
+    const href = screenHref(screen, projectId, cycleId);
+    return (
+      <Link
+        key={screen}
+        href={href}
+        className={cn("ol-rail-i", isActive(screen) && "is-on", screen === "S02" && "is-hub")}
+        aria-current={isActive(screen) ? "page" : undefined}
+        title={`${s.num} · ${s.name}`}
+      >
+        <span className="ol-rail-mono">{s.mono}</span>
+        <span className="ol-rail-t">{s.short}</span>
+        {flag && (
+          <span
+            className={cn("ol-rail-flag", `ol-tc-${presentationForUiKey(flag).tone}`)}
+            aria-label="needs attention"
+          >
+            {presentationForUiKey(flag).glyph}
+          </span>
+        )}
+      </Link>
+    );
+  };
 
   return (
-    <nav aria-label="Project navigation" className="flex w-56 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] p-2 text-sm">
-      <Link href="/projects" className="mb-3 px-2 text-xs text-[var(--muted)] hover:text-amber-300">
-        ← Projects
+    <nav className="ol-rail" aria-label="Workspace">
+      {item("S01")}
+      {item("S02")}
+      <div className="ol-rail-div" aria-hidden="true">
+        <span>drill</span>
+      </div>
+      {DRILL_SCREENS.map(item)}
+      <div className="ol-rail-spacer" />
+      <Link
+        href={screenHref("INT", projectId, cycleId)}
+        className={cn("ol-rail-i ol-rail-util", isActive("INT") && "is-on")}
+        title="Integrations"
+      >
+        <span className="ol-rail-mono">IO</span>
+        <span className="ol-rail-t">Integr.</span>
       </Link>
-      {groups.map((g) => (
-        <div key={g.id} className="mb-3">
-          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-            {g.label}
-          </div>
-          {g.items.map((item) => {
-            const active = pathname === item.href.split("?")[0] || pathname?.startsWith(item.href.split("?")[0] + "/");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "block rounded-md px-2 py-1.5 hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-amber-500",
-                  active && "bg-white/10 text-amber-300",
-                )}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+      <Link
+        href={screenHref("AUD", projectId, cycleId)}
+        className={cn("ol-rail-i ol-rail-util", isActive("AUD") && "is-on")}
+        title="Audit history"
+      >
+        <span className="ol-rail-mono">AU</span>
+        <span className="ol-rail-t">Audit</span>
+      </Link>
     </nav>
   );
 }

@@ -1,0 +1,137 @@
+/* Dialogs / drawers (design reference) */
+.ol-scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+.ol-scrim.is-drawer {
+  place-items: stretch end;
+}
+.ol-dialog {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--surface);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-overlay);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+}
+.ol-dialog.is-wide {
+  width: 680px;
+}
+.ol-dialog-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.ol-dialog-b {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ol-dialog-f {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+}
+.ol-x {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.ol-drawer {
+  width: 420px;
+  max-width: 100vw;
+  height: 100%;
+  background: var(--surface);
+  box-shadow: var(--shadow-overlay);
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.ol-appr {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ol-appr p {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+}
+.ol-appr-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  font-size: 13px;
+}
+.ol-appr-2 {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+}
+.ol-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ol-field textarea,
+.ol-field input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 13.5px;
+  resize: vertical;
+}
+.ol-sent {
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--active-tint);
+  font-size: 13px;
+}
+.ol-ask-q p,
+.ol-ask-a p {
+  margin: 4px 0 8px;
+  font-size: 13.5px;
+}
+.ol-ask-a {
+  padding: 12px;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+.ol-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 13px;
+  box-shadow: var(--shadow-overlay);
+  max-width: 640px;
+}

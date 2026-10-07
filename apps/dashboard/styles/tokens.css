@@ -1,0 +1,103 @@
+/* Generated from docs/design/olympus-ui-spec/tokens.json — do not hand-tint. */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-sunken: #eef1f5;
+  --surface-hover: #e9edf3;
+  --text: #182333;
+  --text-secondary: #596779;
+  --border: #dde3eb;
+  --border-strong: #7f8b9c;
+  --active: #3d59bf;
+  --active-tint: #e8edfb;
+  --success: #21704e;
+  --success-tint: #e2f1e9;
+  --attention: #8a560c;
+  --attention-tint: #faeedc;
+  --failure: #a23842;
+  --failure-tint: #f8e3e5;
+  --primary: #182333;
+  --on-primary: #ffffff;
+  --edge: #a9b3c1;
+  --edge-strong: #4e5b6d;
+  --focus: var(--active);
+  --scrim: rgba(17, 21, 28, 0.42);
+  --shadow-overlay: 0 12px 32px rgba(24, 35, 51, 0.18), 0 2px 6px rgba(24, 35, 51, 0.08);
+
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-chip: 4px;
+  --radius-control: 6px;
+  --radius-surface: 8px;
+
+  --rail-width: 76px;
+  --inspector-width: 320px;
+  --lane-min-width: 148px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #11151c;
+  --surface: #191e27;
+  --surface-sunken: #141922;
+  --surface-hover: #232a36;
+  --text: #e3e9f2;
+  --text-secondary: #a4b1c3;
+  --border: #343e4e;
+  --border-strong: #76839a;
+  --active: #a6b7ff;
+  --active-tint: #232c4a;
+  --success: #9ad7b7;
+  --success-tint: #173329;
+  --attention: #e9c38b;
+  --attention-tint: #372a16;
+  --failure: #ef9aa3;
+  --failure-tint: #3b1e24;
+  --primary: #e3e9f2;
+  --on-primary: #11151c;
+  --edge: #4c586b;
+  --edge-strong: #b4c0d1;
+  --focus: var(--active);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #11151c;
+    --surface: #191e27;
+    --surface-sunken: #141922;
+    --surface-hover: #232a36;
+    --text: #e3e9f2;
+    --text-secondary: #a4b1c3;
+    --border: #343e4e;
+    --border-strong: #76839a;
+    --active: #a6b7ff;
+    --active-tint: #232c4a;
+    --success: #9ad7b7;
+    --success-tint: #173329;
+    --attention: #e9c38b;
+    --attention-tint: #372a16;
+    --failure: #ef9aa3;
+    --failure-tint: #3b1e24;
+    --primary: #e3e9f2;
+    --on-primary: #11151c;
+    --edge: #4c586b;
+    --edge-strong: #b4c0d1;
+    --focus: var(--active);
+    --scrim: rgba(0, 0, 0, 0.6);
+    --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+}

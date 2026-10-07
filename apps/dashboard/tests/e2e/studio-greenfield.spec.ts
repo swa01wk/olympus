@@ -56,7 +56,8 @@ test.describe("Studio greenfield @live", () => {
     await page.getByRole("button", { name: /Product model/i }).click();
     await expect(page.getByText("Capabilities & features")).toBeVisible({ timeout: 30_000 });
 
-    const featureBtn = page.locator(".ol-ws-list-btn").first();
+    const featuresPanel = page.locator(".ol-ws-split").first();
+    const featureBtn = featuresPanel.getByRole("button", { name: /^FEAT-/ }).first();
     await expect(featureBtn).toBeVisible({ timeout: 30_000 });
     await featureBtn.click();
 

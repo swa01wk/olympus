@@ -102,7 +102,10 @@ export function ProductModelStage({
   const [clarAnswer, setClarAnswer] = useState<Record<string, string>>({});
 
   const specs = useFeatureSpecs(featureId);
-  const specDetail = useFeatureSpecDetail(specId);
+  const selectedSpecs = specs.data ?? [];
+  const latestSpec = selectedSpecs[selectedSpecs.length - 1];
+  const activeSpecId = specId ?? latestSpec?.id;
+  const specDetail = useFeatureSpecDetail(activeSpecId);
   const saveSpec = useCreateFeatureSpecVersion(scope, featureId ?? "");
   const answerClar = useAnswerClarification(scope);
   const featureIds = useMemo(
@@ -130,10 +133,6 @@ export function ProductModelStage({
     }
     return ids;
   }, [allSpecQueries]);
-
-  const selectedSpecs = specs.data ?? [];
-  const latestSpec = selectedSpecs[selectedSpecs.length - 1];
-  const activeSpecId = specId ?? latestSpec?.id;
 
   return (
     <StageWorkspaceFrame>

@@ -75,7 +75,8 @@ test.describe("Studio greenfield @live", () => {
     await page.goto(`/projects/${projectId}/cycles/${cycleId}/studio?stage=PRODUCT_MODEL`);
     await expect(page.getByText(/Decision required/i)).toBeVisible({ timeout: 60_000 });
 
-    const note = page.locator(".ol-decision-panel textarea, .ol-appr textarea").first();
+    const note = page.locator(".ol-decision-panel textarea");
+    await expect(note).toBeEnabled({ timeout: 60_000 });
     await note.fill("Please tighten acceptance criteria before scope sign-off.");
     await page.getByRole("button", { name: "Request changes" }).click();
     await expect(page.getByText(/Decision required/i)).toBeHidden({ timeout: 120_000 });

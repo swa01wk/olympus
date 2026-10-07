@@ -88,7 +88,8 @@ export async function setBrowserToken(page: Page, token: string) {
   }, token);
 }
 
+/** Switch actor token; must re-register init script so reload does not restore an earlier token. */
 export async function applyTokenAndReload(page: Page, token: string) {
-  await page.evaluate((t) => window.localStorage.setItem("olympus_api_token", t), token);
+  await setBrowserToken(page, token);
   await page.reload();
 }

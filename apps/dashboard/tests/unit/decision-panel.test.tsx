@@ -77,6 +77,7 @@ describe("DecisionPanel", () => {
     wrap(
       <DecisionPanel
         stage="PRODUCT_MODEL"
+        cycleType="GREENFIELD_BUILD"
         inbox={inbox}
         projectId="p1"
         nextTransitions={transitions}
@@ -92,6 +93,7 @@ describe("DecisionPanel", () => {
     const { container } = wrap(
       <DecisionPanel
         stage="DISCOVERY"
+        cycleType="GREENFIELD_BUILD"
         inbox={inbox}
         projectId="p1"
         nextTransitions={transitions}
@@ -99,5 +101,65 @@ describe("DecisionPanel", () => {
       />,
     );
     expect(container.textContent).toBe("");
+  });
+
+  it("shows repair IMPLEMENTATION_SPEC at ROOT_CAUSE on bug fix cycles", () => {
+    wrap(
+      <DecisionPanel
+        stage="ROOT_CAUSE"
+        cycleType="BUG_FIX"
+        inbox={[
+          {
+            kind: "APPROVAL",
+            id: "inbox-rc",
+            title: "Repair spec",
+            approval: {
+              id: "apr-rc",
+              key: "APR-RC",
+              approval_type: "IMPLEMENTATION_SPEC",
+              subject_type: "ImplementationSpec",
+              subject_id: "spec-1",
+              subject_hash: "hash",
+              status: "PENDING",
+            },
+          },
+        ]}
+        projectId="p1"
+        nextTransitions={[]}
+        onDecided={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Decision required/i)).toBeTruthy();
+    expect(screen.getByText(/IMPLEMENTATION_SPEC · APR-RC/)).toBeTruthy();
+  });
+
+  it("shows ARCHITECTURE_DELTA at IMPACT_ANALYSIS on feature change cycles", () => {
+    wrap(
+      <DecisionPanel
+        stage="IMPACT_ANALYSIS"
+        cycleType="FEATURE_CHANGE"
+        inbox={[
+          {
+            kind: "APPROVAL",
+            id: "inbox-ad",
+            title: "Architecture delta",
+            approval: {
+              id: "apr-ad",
+              key: "APR-AD",
+              approval_type: "ARCHITECTURE_DELTA",
+              subject_type: "Architecture",
+              subject_id: "arch-1",
+              subject_hash: "hash",
+              status: "PENDING",
+            },
+          },
+        ]}
+        projectId="p1"
+        nextTransitions={[]}
+        onDecided={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Decision required/i)).toBeTruthy();
+    expect(screen.getByText(/ARCHITECTURE_DELTA · APR-AD/)).toBeTruthy();
   });
 });

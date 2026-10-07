@@ -113,6 +113,7 @@ export function StudioShell({
       </header>
       <DecisionPanel
         stage={selectedStage}
+        cycleType={cycle.type}
         inbox={inboxItems}
         projectId={project?.id ?? cycle.project_id}
         nextTransitions={nextTransitions}

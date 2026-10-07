@@ -58,7 +58,13 @@ export function StudioScreen({ projectId, cycleId }: { projectId: string; cycleI
   const selectedStage =
     stageParam && orderedStages.includes(stageParam) ? stageParam : defaultStage;
 
-  const inboxStages = useMemo(() => inboxStagesForCycle(inbox.data ?? []), [inbox.data]);
+  const inboxStages = useMemo(
+    () =>
+      cycleRow
+        ? inboxStagesForCycle(inbox.data ?? [], cycleRow.type as DeliveryCycleType)
+        : new Set<string>(),
+    [inbox.data, cycleRow],
+  );
   const inboxCount = (inbox.data ?? []).length;
 
   const showFollowBanner = Boolean(

@@ -21,6 +21,7 @@ import {
 } from "@/src/api/hooks/use-studio-queries";
 import { fetchAuditForTarget } from "@/src/api/resources";
 import type { InboxItem, TransitionPreview } from "@/src/api/types/core";
+import type { DeliveryCycleType } from "@/src/control-plane/stage-lanes";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
@@ -98,18 +99,20 @@ function ApprovalSubjectPreview({
 
 export function DecisionPanel({
   stage,
+  cycleType,
   inbox,
   projectId,
   nextTransitions,
   onDecided,
 }: {
   stage: string;
+  cycleType: DeliveryCycleType;
   inbox: InboxItem[];
   projectId: string;
   nextTransitions: TransitionPreview[];
   onDecided: () => void;
 }) {
-  const pending = findPendingApprovalForStage(inbox, stage);
+  const pending = findPendingApprovalForStage(inbox, stage, cycleType);
   const actor = useActorMe();
   const canDecide = (actor.data?.roles ?? []).includes("APPROVER");
 

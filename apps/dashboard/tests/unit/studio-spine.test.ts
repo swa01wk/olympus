@@ -1,18 +1,68 @@
 import { describe, expect, it } from "vitest";
 import {
+  approvalStage,
   findPendingApprovalForStage,
   inboxStagesForCycle,
   isCycleStageBlocked,
   spineStatusForStage,
 } from "@/lib/studio-spine";
 import type { InboxItem } from "@/src/api/types/core";
+import type { DeliveryCycleType } from "@/src/control-plane/stage-lanes";
 import { STAGES_BY_CYCLE_TYPE } from "@/src/control-plane/stage-lanes";
+
+const CYCLE_TYPES: DeliveryCycleType[] = [
+  "GREENFIELD_BUILD",
+  "BROWNFIELD_ONBOARDING",
+  "FEATURE_CHANGE",
+  "BUG_FIX",
+  "REMEDIATION",
+];
 
 describe("STAGES_BY_CYCLE_TYPE", () => {
   it("differs between greenfield and bug fix", () => {
     expect(STAGES_BY_CYCLE_TYPE.GREENFIELD_BUILD[0]).toBe("DISCOVERY");
     expect(STAGES_BY_CYCLE_TYPE.BUG_FIX[0]).toBe("TRIAGE");
     expect(STAGES_BY_CYCLE_TYPE.GREENFIELD_BUILD).not.toEqual(STAGES_BY_CYCLE_TYPE.BUG_FIX);
+  });
+});
+
+describe("approvalStage", () => {
+  const cases: [string, DeliveryCycleType, string | null][] = [
+    ["IMPLEMENTATION_SPEC", "GREENFIELD_BUILD", "PLANNING"],
+    ["IMPLEMENTATION_SPEC", "FEATURE_CHANGE", "PLANNING"],
+    ["IMPLEMENTATION_SPEC", "REMEDIATION", "PLANNING"],
+    ["IMPLEMENTATION_SPEC", "BUG_FIX", "ROOT_CAUSE"],
+    ["IMPLEMENTATION_SPEC", "BROWNFIELD_ONBOARDING", "REMEDIATION"],
+    ["ARCHITECTURE_DELTA", "FEATURE_CHANGE", "IMPACT_ANALYSIS"],
+    ["ARCHITECTURE", "GREENFIELD_BUILD", "ARCHITECTURE"],
+    ["ARCHITECTURE", "BROWNFIELD_ONBOARDING", "BASELINE"],
+    ["PROMOTION", "BROWNFIELD_ONBOARDING", "BASELINE"],
+    ["SPEC_DELTA", "FEATURE_CHANGE", "SPEC_DELTA"],
+    ["UNREPRODUCED_REPAIR", "BUG_FIX", "REPRODUCTION"],
+    ["FINDING_WAIVER", "GREENFIELD_BUILD", "ASSURANCE"],
+    ["ACTION", "GREENFIELD_BUILD", "DEVELOPMENT"],
+    ["RELEASE", "GREENFIELD_BUILD", "RELEASE"],
+    ["SCOPE", "GREENFIELD_BUILD", "PRODUCT_MODEL"],
+    ["EXPECTED_BEHAVIOR", "BUG_FIX", "EXPECTED_BEHAVIOR"],
+  ];
+
+  it.each(cases)("maps %s on %s → %s", (approvalType, cycleType, stage) => {
+    expect(approvalStage(approvalType, cycleType)).toBe(stage);
+  });
+
+  it("returns null for ARCHITECTURE_DELTA outside feature change", () => {
+    for (const cycleType of CYCLE_TYPES) {
+      if (cycleType === "FEATURE_CHANGE") continue;
+      expect(approvalStage("ARCHITECTURE_DELTA", cycleType)).toBeNull();
+    }
+  });
+
+  it("returns null for removed approval types", () => {
+    for (const t of ["REPAIR_SPEC", "READINESS", "SPEC_DECISION", "DEPLOYMENT"] as const) {
+      for (const cycleType of CYCLE_TYPES) {
+        expect(approvalStage(t, cycleType)).toBeNull();
+      }
+    }
   });
 });
 
@@ -74,28 +124,55 @@ describe("spineStatusForStage", () => {
 
 describe("inboxStagesForCycle", () => {
   it("maps SCOPE approval to PRODUCT_MODEL", () => {
-    const stages = inboxStagesForCycle([
-      {
-        kind: "APPROVAL",
-        id: "a1",
-        title: "Scope",
-        approval: {
+    const stages = inboxStagesForCycle(
+      [
+        {
+          kind: "APPROVAL",
           id: "a1",
-          key: "APR-1",
-          approval_type: "SCOPE",
-          subject_type: "scope",
-          subject_id: "s1",
-          subject_hash: "h",
-          status: "PENDING",
+          title: "Scope",
+          approval: {
+            id: "a1",
+            key: "APR-1",
+            approval_type: "SCOPE",
+            subject_type: "scope",
+            subject_id: "s1",
+            subject_hash: "h",
+            status: "PENDING",
+          },
         },
-      },
-    ]);
+      ],
+      "GREENFIELD_BUILD",
+    );
     expect(stages.has("PRODUCT_MODEL")).toBe(true);
+  });
+
+  it("maps bug-fix repair spec to ROOT_CAUSE", () => {
+    const stages = inboxStagesForCycle(
+      [
+        {
+          kind: "APPROVAL",
+          id: "a1",
+          title: "Repair spec",
+          approval: {
+            id: "a1",
+            key: "APR-2",
+            approval_type: "IMPLEMENTATION_SPEC",
+            subject_type: "ImplementationSpec",
+            subject_id: "s1",
+            subject_hash: "h",
+            status: "PENDING",
+          },
+        },
+      ],
+      "BUG_FIX",
+    );
+    expect(stages.has("ROOT_CAUSE")).toBe(true);
+    expect(stages.has("PLANNING")).toBe(false);
   });
 });
 
 describe("findPendingApprovalForStage", () => {
-  const inbox: InboxItem[] = [
+  const scopeInbox: InboxItem[] = [
     {
       kind: "APPROVAL",
       id: "i1",
@@ -113,10 +190,56 @@ describe("findPendingApprovalForStage", () => {
   ];
 
   it("returns approval when stage matches type map", () => {
-    expect(findPendingApprovalForStage(inbox, "PRODUCT_MODEL")?.key).toBe("APR-1");
+    expect(
+      findPendingApprovalForStage(scopeInbox, "PRODUCT_MODEL", "GREENFIELD_BUILD")?.key,
+    ).toBe("APR-1");
   });
 
   it("returns null for unrelated stage", () => {
-    expect(findPendingApprovalForStage(inbox, "DISCOVERY")).toBeNull();
+    expect(findPendingApprovalForStage(scopeInbox, "DISCOVERY", "GREENFIELD_BUILD")).toBeNull();
+  });
+
+  it("finds IMPLEMENTATION_SPEC at ROOT_CAUSE for bug fix", () => {
+    const inbox: InboxItem[] = [
+      {
+        kind: "APPROVAL",
+        id: "i1",
+        title: "Repair",
+        approval: {
+          id: "a2",
+          key: "APR-RC",
+          approval_type: "IMPLEMENTATION_SPEC",
+          subject_type: "ImplementationSpec",
+          subject_id: "s1",
+          subject_hash: "hash",
+          status: "PENDING",
+        },
+      },
+    ];
+    expect(findPendingApprovalForStage(inbox, "ROOT_CAUSE", "BUG_FIX")?.key).toBe("APR-RC");
+    expect(findPendingApprovalForStage(inbox, "PLANNING", "BUG_FIX")).toBeNull();
+  });
+
+  it("finds ARCHITECTURE_DELTA at IMPACT_ANALYSIS for feature change", () => {
+    const inbox: InboxItem[] = [
+      {
+        kind: "APPROVAL",
+        id: "i1",
+        title: "Delta",
+        approval: {
+          id: "a3",
+          key: "APR-AD",
+          approval_type: "ARCHITECTURE_DELTA",
+          subject_type: "Architecture",
+          subject_id: "s1",
+          subject_hash: "hash",
+          status: "PENDING",
+        },
+      },
+    ];
+    expect(findPendingApprovalForStage(inbox, "IMPACT_ANALYSIS", "FEATURE_CHANGE")?.key).toBe(
+      "APR-AD",
+    );
+    expect(findPendingApprovalForStage(inbox, "ARCHITECTURE", "FEATURE_CHANGE")).toBeNull();
   });
 });

@@ -1,0 +1,19 @@
+{
+  "title": "Olympus Integrations & Reconciliation",
+  "uid": "olympus-integrations",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Connector UNKNOWN",
+      "targets": [{ "expr": "sum(increase(olympus_connector_unknown_total[1h]))" }]
+    },
+    {
+      "type": "stat",
+      "title": "Inbound events",
+      "targets": [{ "expr": "sum by (status) (increase(olympus_inbound_events_total[1h]))" }]
+    }
+  ]
+}

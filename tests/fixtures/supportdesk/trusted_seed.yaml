@@ -1,0 +1,59 @@
+project_name: SupportDesk Trusted
+feature_key: FEAT-TICKETS
+feature_name: Create and manage tickets
+spec_lineage: SPEC-FEAT-TICKETS
+implementation_spec_lineage: SPEC-IMPL-FEAT-TICKETS
+baseline_set_key: B1
+
+feature_spec:
+  behavior: Create and update tickets via HTTP API
+  summary: Ticket management
+  inputs:
+    - title
+    - status
+  outputs:
+    - ticket
+  rules:
+    - default ticket status is OPEN
+  constraints: []
+
+acceptance_criteria:
+  - lineage_key: AC-TICKET-CREATE
+    statement: Client can create a ticket with title and OPEN status
+    given: a valid ticket payload
+    when: POST /tickets
+    then: response is 201 and ticket is persisted
+    mandatory: true
+    evidence_requirement: EXECUTABLE
+  - lineage_key: AC-TICKET-DEFAULT-OPEN
+    statement: New tickets default to OPEN
+    given: a create request without explicit status override semantics
+    when: POST /tickets
+    then: stored status is OPEN
+    mandatory: true
+    evidence_requirement: EXECUTABLE
+
+spec_code_links:
+  - ac_lineage_key: AC-TICKET-CREATE
+    code_stable_key: ROUTE:POST /tickets
+    relation: VERIFIES
+  - spec_lineage_key: SPEC-FEAT-TICKETS
+    code_stable_key: ROUTE:POST /tickets
+    relation: IMPLEMENTS
+  - ac_lineage_key: AC-TICKET-CREATE
+    code_stable_key: ORM:Ticket
+    relation: VERIFIES
+
+baselines:
+  - lineage_key: BL-TICKET-CREATE
+    ac_lineage_key: AC-TICKET-CREATE
+    check_ref: tests/test_tickets_api.py::test_create_ticket
+    given: API client
+    when: POST /tickets with title Help
+    then: HTTP 201
+  - lineage_key: BL-TICKET-DEFAULT-OPEN
+    ac_lineage_key: AC-TICKET-DEFAULT-OPEN
+    check_ref: tests/test_ticket_service.py
+    given: ticket service
+    when: creating ticket
+    then: status OPEN

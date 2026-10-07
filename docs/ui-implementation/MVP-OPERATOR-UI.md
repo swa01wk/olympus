@@ -1,7 +1,7 @@
 # MVP operator UI — acceptance & Phase 19 alignment
 
 **Status:** Phases 0–7 complete (2026-10-07).  
-**Scope:** `apps/dashboard/` + Control API only (no backend changes).
+**Scope:** Primary work in `apps/dashboard/` + `docs/ui-implementation/`; minimal demo handoff in `scripts/demo/chained/driver.py` and chained journey pause timing for Plan 19 walkthrough.
 
 Plan 19 deferred the **Playwright operator walkthrough** while the legacy dashboard was removed ([`plans/19-final-e2e-and-mvp-acceptance.md`](../../plans/19-final-e2e-and-mvp-acceptance.md) §1 item 7). This rebuild restores a **control-plane-first** client suitable to reintroduce that walkthrough against the SupportDesk chained demo.
 
@@ -50,18 +50,24 @@ Automated: `npm run check` (26 unit/component tests), `npm run test:e2e` (stubbe
 
 ---
 
-## 3. Re-enabling Plan 19 Playwright walkthrough
+## 3. Plan 19 Playwright walkthrough (R3 approval)
 
-Suggested follow-up (backend + UI, separate PR):
+Implemented (2026-10-07):
 
-1. Extend `scripts/demo/run_mvp.py` **`--pause-before approve_release:DC-004`** to open `http://127.0.0.1:3010/...` with a known `projectId` / `cycleId` / `approvalId` (from driver state file).
-2. Add `tests/e2e/mvp-chained.spec.ts` in `apps/dashboard` that:
-   - reads pause metadata from env (or a JSON file written by the driver);
-   - completes R3 approval through **ApprovalDialog**;
-   - asserts VIEWER token cannot complete the same action (API 403 or disabled UI — prefer API assertion in journey test).
-3. Run chaos item “control-api restart during SSE” with dashboard connected (Plan 19 §4.6) — assert **Stream disconnected** notice and successful refetch.
+1. **`--pause-before approve_release:DC-004`** writes `var/olympus/demo/pause.json` with `project_id`, `cycle_id`, `release_id`, `approval_id`, `api_base`, and `dashboard_url` (default dashboard `http://127.0.0.1:3010`).
+2. Pause fires **after** DC-004 release is **ELIGIBLE** (not at cycle start). The journey completes release execution after `resumed: true` (UI may have already `POST /approvals/{id}/decision`).
+3. Cycle map deep link: `?approval={uuid}` opens **ApprovalDialog** (`CycleMapScreen` + `OperatorDialogsProvider.openApproval`).
+4. **`tests/e2e/mvp-chained.spec.ts`** — opt-in with `MVP_E2E_LIVE=1`, `OLYMPUS_HUMAN_TOKEN`, and an active pause file; not run in default dashboard CI.
 
-Until then, Plan 19 items **19.16** and **Playwright walkthrough** remain **interim API/journey** proof.
+```bash
+cd apps/dashboard
+export MVP_E2E_LIVE=1 OLYMPUS_HUMAN_TOKEN="$OLYMPUS_HUMAN_TOKEN"
+npm run test:e2e -- tests/e2e/mvp-chained.spec.ts
+```
+
+Manual resume without Playwright: `uv run python scripts/demo/resume_mvp_pause.py` after approving in the browser.
+
+Still TODO for full Plan 19 **19.16**: VIEWER 403 assertion in the same Playwright session; chaos “control-api restart during SSE” with dashboard connected.
 
 ---
 

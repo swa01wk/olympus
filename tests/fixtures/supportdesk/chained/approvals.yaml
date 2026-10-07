@@ -1,0 +1,12 @@
+# Human-authored approval notes for chained MVP (keyword matched in driver).
+defaults:
+  note: "Approved for chained MVP demo."
+entries:
+  - keywords: ["scope", "product"]
+    note: "Scope approved for SupportDesk MVP."
+  - keywords: ["architecture"]
+    note: "Architecture approved."
+  - keywords: ["implementation", "task plan"]
+    note: "Planning approved."
+  - keywords: ["release", "R1", "R2", "R3"]
+    note: "Release approved by lead operator."

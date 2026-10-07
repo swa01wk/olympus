@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class EvidenceType(StrEnum):
+    UNIT_TEST = "UNIT_TEST"
+    INTEGRATION_TEST = "INTEGRATION_TEST"
+    API_TEST = "API_TEST"
+    E2E_TEST = "E2E_TEST"
+    REGRESSION_TEST = "REGRESSION_TEST"
+    REPRODUCTION = "REPRODUCTION"
+    RUNTIME_OBSERVATION = "RUNTIME_OBSERVATION"
+    STATIC_REVIEW = "STATIC_REVIEW"
+    MODEL_ASSESSMENT = "MODEL_ASSESSMENT"
+    EXTERNAL_CI = "EXTERNAL_CI"
+    INTEGRATION_CHECK = "INTEGRATION_CHECK"
+
+
+class EvidenceResult(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    ERROR = "ERROR"
+    SKIPPED = "SKIPPED"
+
+
+class EvidenceProducer(StrEnum):
+    SENTINEL = "SENTINEL"
+    WARDEN = "WARDEN"
+    INTEGRATION = "INTEGRATION"
+    CI = "CI"
+    SYSTEM = "SYSTEM"
+
+
+class GateType(StrEnum):
+    INTEGRATION = "INTEGRATION"
+    WARDEN = "WARDEN"
+    SENTINEL = "SENTINEL"
+    BASELINE = "BASELINE"
+    REGRESSION = "REGRESSION"
+    REPRODUCTION = "REPRODUCTION"
+
+
+class GateStatus(StrEnum):
+    PENDING = "PENDING"
+    PASS = "PASS"
+    FAIL = "FAIL"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class ObligationStatus(StrEnum):
+    OPEN = "OPEN"
+    SATISFIED = "SATISFIED"
+    FAILED = "FAILED"
+    WAIVED = "WAIVED"
+
+
+class ObligationReason(StrEnum):
+    AC_MANDATORY = "AC_MANDATORY"
+    AC_OPTIONAL = "AC_OPTIONAL"
+    IMPACT_ASSESSMENT = "IMPACT_ASSESSMENT"
+    BASELINE_REQUIRED = "BASELINE_REQUIRED"
+    AC_REVALIDATION = "AC_REVALIDATION"
+    DEFECT_REPRODUCTION = "DEFECT_REPRODUCTION"
+    REGRESSION = "REGRESSION"
+
+
+class VerificationPlanStatus(StrEnum):
+    PROPOSED = "PROPOSED"
+    VALIDATED = "VALIDATED"
+    REJECTED = "REJECTED"
+
+
+class SubjectType(StrEnum):
+    AC = "AC"
+    BASELINE = "BASELINE"
+    FINDING = "FINDING"
+    DEFECT = "DEFECT"
+    GATE = "GATE"
+    IC = "IC"

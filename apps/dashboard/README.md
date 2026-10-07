@@ -7,6 +7,15 @@ Control-plane-first frontend for the Olympus Control API. Implementation follows
 | Variable | Description |
 |----------|-------------|
 | `NEXT_PUBLIC_OLYMPUS_API_URL` | Control API base URL (e.g. `http://127.0.0.1:8000`). Used from Phase 3 onward. |
+| `NEXT_PUBLIC_OLYMPUS_API_TOKEN` | Bearer token for local dev (optional if you save via the Projects sign-in form). |
+
+Copy `.env.local.example` to `.env.local` after seeding a token:
+
+```bash
+# from repo root — postgres running, migrations applied
+uv run python -m apps.control_api.cli.seed_actor --name dev --roles OPERATOR,APPROVER
+uv run uvicorn apps.control_api.main:app --reload
+```
 
 ## Scripts
 
@@ -29,4 +38,4 @@ First-time e2e: `npx playwright install chromium`
 
 ## Auth (Phase 3)
 
-Set a bearer token via `localStorage.setItem('olympus_api_token', '<token>')` or `NEXT_PUBLIC_OLYMPUS_API_TOKEN` for local smoke tests on `/`.
+Use the sign-in form on `/projects`, set `NEXT_PUBLIC_OLYMPUS_API_TOKEN` in `.env.local`, or run `localStorage.setItem('olympus_api_token', '<token>')` in the browser console. Restart `npm run dev` after changing `.env.local`.

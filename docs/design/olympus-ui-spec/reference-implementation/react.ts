@@ -1,0 +1,10 @@
+export const React: any = (window as any).React;
+export const useState: any = React.useState;
+export const useMemo: any = React.useMemo;
+export const useRef: any = React.useRef;
+export const useEffect: any = React.useEffect;
+export const useLayoutEffect: any = React.useLayoutEffect;
+export const useCallback: any = React.useCallback;
+export const createContext: any = React.createContext;
+export const useContext: any = React.useContext;
+export const Fragment: any = React.Fragment;

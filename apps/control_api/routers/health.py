@@ -6,6 +6,8 @@ from pathlib import Path
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from core.config.settings import get_settings
+from core.execution.sandbox.runner import sandbox_available
 from fastapi import APIRouter, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -53,17 +55,34 @@ async def health() -> dict[str, str]:
 @router.get("/ready")
 async def ready(request: Request) -> Response:
     engine: AsyncEngine = request.app.state.engine
+    settings = get_settings()
     db_ok = await _db_ok(engine)
     migrations_ok = await _migrations_at_head(engine) if db_ok else False
+    storage_ok = settings.olympus_storage_root.is_dir()
+    sandbox_ok = sandbox_available(settings)
+    llm_ok = True
+    if settings.llm_live_tests:
+        provider = settings.model_provider
+        if provider == "anthropic" and not settings.anthropic_api_key.get_secret_value():
+            llm_ok = False
+        if provider == "openai" and not settings.openai_api_key.get_secret_value():
+            llm_ok = False
 
-    if db_ok and migrations_ok:
+    ready = db_ok and migrations_ok and storage_ok and sandbox_ok and llm_ok
+    if ready:
         return Response(
-            content='{"db":"ok","migrations":"head"}',
+            content='{"db":"ok","migrations":"head","storage":"ok","sandbox":"ok"}',
             media_type="application/json",
             status_code=200,
         )
 
-    body = {"db": "ok" if db_ok else "error", "migrations": "head" if migrations_ok else "error"}
+    body = {
+        "db": "ok" if db_ok else "error",
+        "migrations": "head" if migrations_ok else "error",
+        "storage": "ok" if storage_ok else "error",
+        "sandbox": "ok" if sandbox_ok else "error",
+        "llm_credentials": "ok" if llm_ok else "error",
+    }
     return Response(
         content=json.dumps(body),
         media_type="application/json",

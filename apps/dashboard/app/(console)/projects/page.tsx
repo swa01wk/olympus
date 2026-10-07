@@ -1,6 +1,7 @@
 "use client";
 
-import { EmptyState, Panel } from "@/components/primitives";
+import { DevApiSignIn } from "@/components/dev/DevApiSignIn";
+import { Panel } from "@/components/primitives";
 import { useProjects } from "@/src/api/hooks/use-olympus-queries";
 import Link from "next/link";
 
@@ -11,12 +12,7 @@ export default function ProjectsIndexPage() {
     <div className="ol-app ol-main">
       <h1 className="ol-title">Projects</h1>
       {projects.isLoading && <p className="ol-muted">Loading…</p>}
-      {projects.isError && (
-        <EmptyState
-          title="Sign in required"
-          description="Set olympus_api_token in localStorage or NEXT_PUBLIC_OLYMPUS_API_TOKEN."
-        />
-      )}
+      {projects.isError && <DevApiSignIn error={projects.error} />}
       <ul className="list-none p-0 m-0 flex flex-col gap-2">
         {(projects.data ?? []).map((p) => (
           <li key={p.id}>

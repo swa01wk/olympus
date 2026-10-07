@@ -41,12 +41,15 @@ export function TaskDag({
   selectedId,
   onSelect,
   mode,
+  preview = false,
 }: {
   nodes: TaskDagNode[];
   edges: TaskDagEdge[];
   selectedId?: string;
   onSelect: (id: string) => void;
   mode: "graph" | "list";
+  /** Proposed task-plan nodes (not yet materialized as Task rows). */
+  preview?: boolean;
 }) {
   const stacked = useMemo(() => layers(nodes, edges), [nodes, edges]);
   const waiting = useMemo(() => {
@@ -67,7 +70,11 @@ export function TaskDag({
           <li key={n.id}>
             <button
               type="button"
-              className={cn("ol-ls w-full text-left", selectedId === n.id && "is-on")}
+              className={cn(
+                "ol-ls w-full text-left",
+                selectedId === n.id && "is-on",
+                preview && "opacity-90",
+              )}
               onClick={() => onSelect(n.id)}
             >
               <span className="ol-ls-code">{n.key}</span>
@@ -91,6 +98,7 @@ export function TaskDag({
               className={cn(
                 "ol-node min-w-[160px] text-left",
                 selectedId === n.id && "is-sel",
+                preview && "is-future",
               )}
               onClick={() => onSelect(n.id)}
             >

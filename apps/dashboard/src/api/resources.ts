@@ -77,6 +77,26 @@ export function fetchTaskDag(cycleId: string) {
   return apiRequest<{ nodes: TaskDagNode[]; edges: TaskDagEdge[] }>(`/views/tasks/${cycleId}/dag`);
 }
 
+export type TaskPlanSummary = {
+  id: string;
+  status: string;
+  validation_report: unknown;
+  task_count: number;
+};
+
+export function fetchTaskPlans(cycleId: string) {
+  return apiRequest<TaskPlanSummary[]>(`/delivery-cycles/${cycleId}/task-plans`);
+}
+
+export function fetchTaskPlan(planId: string) {
+  return apiRequest<{
+    id: string;
+    status: string;
+    body: Record<string, unknown>;
+    validation_report: unknown;
+  }>(`/task-plans/${planId}`);
+}
+
 export function fetchExecutions(taskId: string) {
   return apiRequest<Execution[]>(`/tasks/${taskId}/executions`);
 }

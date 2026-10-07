@@ -1,0 +1,14 @@
+{
+  "title": "Olympus Governance",
+  "uid": "olympus-governance",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "ToolGateway denials",
+      "targets": [{ "expr": "sum by (reason) (rate(olympus_toolgateway_denials_total[5m]))" }]
+    }
+  ]
+}

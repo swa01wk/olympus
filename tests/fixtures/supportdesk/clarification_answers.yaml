@@ -1,0 +1,11 @@
+# Keyword-matched clarification answers for SupportDesk journey tests.
+defaults:
+  - keywords: ["default", "assume", "unsure"]
+    answer: "Accept the default assumption and proceed."
+entries:
+  - keywords: ["ticket", "priority", "sla"]
+    answer: "Use standard priority levels P1–P4 with 24h SLA for P1."
+  - keywords: ["authentication", "auth", "login"]
+    answer: "Email and password with optional SSO in a later phase."
+  - keywords: ["notification", "email"]
+    answer: "Email notifications for ticket updates only in MVP."

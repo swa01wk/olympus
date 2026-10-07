@@ -21,6 +21,7 @@ def test_scheduler_sigterm_handler_sets_stop_flag() -> None:
 
 
 @pytest.mark.unit
-async def test_worker_once_exits() -> None:
+async def test_worker_once_exits(migrated_db: str) -> None:
+    _ = migrated_db
     code = await run_loop(once=True)
     assert code == 0

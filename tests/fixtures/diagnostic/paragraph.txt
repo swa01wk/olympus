@@ -1,0 +1,3 @@
+Olympus routes every model-dependent capability through a single audited ModelRouter.
+Structured outputs are validated against Pydantic schemas before any canonical state is written.
+LangGraph checkpoints are execution-local optimizations and must never be treated as authoritative.

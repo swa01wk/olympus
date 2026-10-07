@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 OlympusEnv = Literal["local", "test", "integration", "journey", "production"]
 WorkspaceBackend = Literal["LOCAL_FILESYSTEM"]
 ModelProvider = Literal["anthropic", "openai"]
-GitProvider = Literal["local", "github"]
+GitProvider = Literal["local", "github", "gitea"]
 
 
 def _resolve_writable_dir(path: Path) -> Path:
@@ -118,6 +118,23 @@ class OlympusSettings(BaseSettings):
     worker_poll_interval_seconds: float = Field(
         default=5.0,
         validation_alias="OLYMPUS_WORKER_POLL_INTERVAL_SECONDS",
+    )
+    execution_lease_ttl_seconds: float = Field(
+        default=120.0,
+        validation_alias="OLYMPUS_EXECUTION_LEASE_TTL_SECONDS",
+    )
+    execution_heartbeat_interval_seconds: float = Field(
+        default=30.0,
+        validation_alias="OLYMPUS_EXECUTION_HEARTBEAT_INTERVAL_SECONDS",
+    )
+    scheduler_admit_batch_size: int = Field(
+        default=10,
+        validation_alias="OLYMPUS_SCHEDULER_ADMIT_BATCH_SIZE",
+    )
+    product_source_decompose_max_chars: int = Field(
+        default=32_000,
+        validation_alias="OLYMPUS_PRODUCT_SOURCE_DECOMPOSE_MAX_CHARS",
+        ge=1,
     )
 
     @field_validator("olympus_worktree_root", mode="before")

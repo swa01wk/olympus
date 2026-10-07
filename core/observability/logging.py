@@ -7,7 +7,9 @@ from typing import Any
 import structlog
 
 from core.config.settings import OlympusSettings, get_settings
+from core.observability.context import structlog_context_processor
 from core.observability.correlation import get_correlation_id
+from core.security.redaction import structlog_redaction_processor
 
 _configured = False
 
@@ -37,6 +39,8 @@ def configure_logging(settings: OlympusSettings | None = None) -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
+            structlog_context_processor,  # type: ignore[list-item]
+            structlog_redaction_processor,  # type: ignore[list-item]
             _add_service_context,  # type: ignore[list-item]
             timestamper,
             structlog.processors.add_log_level,

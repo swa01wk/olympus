@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class IndexKind(StrEnum):
+    CANDIDATE = "CANDIDATE"
+    CANONICAL = "CANONICAL"
+
+
+class IndexSource(StrEnum):
+    REPOSITORY_SNAPSHOT = "REPOSITORY_SNAPSHOT"
+    EXECUTION = "EXECUTION"
+    INTEGRATION_CANDIDATE = "INTEGRATION_CANDIDATE"
+    RELEASE = "RELEASE"
+    EXTERNAL_PUSH = "EXTERNAL_PUSH"
+
+
+class EntityType(StrEnum):
+    REPOSITORY = "REPOSITORY"
+    PACKAGE = "PACKAGE"
+    MODULE = "MODULE"
+    FILE = "FILE"
+    CLASS = "CLASS"
+    METHOD = "METHOD"
+    FUNCTION = "FUNCTION"
+    ROUTE = "ROUTE"
+    SCHEMA = "SCHEMA"
+    ORM_MODEL = "ORM_MODEL"
+    TABLE = "TABLE"
+    TEST = "TEST"
+
+
+class RelationType(StrEnum):
+    CONTAINS = "CONTAINS"
+    IMPORTS = "IMPORTS"
+    CALLS = "CALLS"
+    INHERITS = "INHERITS"
+    ACCESSES = "ACCESSES"
+    EXPOSES = "EXPOSES"
+    USES_SCHEMA = "USES_SCHEMA"
+    MAPS_TO = "MAPS_TO"
+    VERIFIED_BY = "VERIFIED_BY"
+
+
+class IndexVersionStatus(StrEnum):
+    BUILDING = "BUILDING"
+    READY = "READY"
+    FAILED = "FAILED"
+    SUPERSEDED = "SUPERSEDED"
+    DISCARDED = "DISCARDED"

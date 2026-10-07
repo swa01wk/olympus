@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class ObservedBehaviorKind(StrEnum):
+    ROUTE_BEHAVIOR = "ROUTE_BEHAVIOR"
+    TEST_ASSERTED = "TEST_ASSERTED"
+    TEST_EXECUTION = "TEST_EXECUTION"
+    DATA_INVARIANT = "DATA_INVARIANT"
+    VALIDATION_RULE = "VALIDATION_RULE"
+    STATE_TRANSITION = "STATE_TRANSITION"
+    RUNTIME_OBSERVED = "RUNTIME_OBSERVED"
+
+
+class RecoveryProposalStatus(StrEnum):
+    VALIDATED = "VALIDATED"
+    REJECTED = "REJECTED"
+    SUPERSEDED = "SUPERSEDED"

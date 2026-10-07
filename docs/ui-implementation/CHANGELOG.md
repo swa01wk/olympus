@@ -64,3 +64,9 @@
 
 - `MVP-OPERATOR-UI.md`: Phase 19 alignment, manual smoke, path to chained Playwright walkthrough.
 - CI: `.github/workflows/dashboard.yml` (check + e2e).
+
+## Plan 19 — R3 walkthrough handoff (2026-10-07)
+
+- Chained driver pause payload: `project_id`, `cycle_id`, `approval_id`, `dashboard_url` (`scripts/demo/chained/driver.py`).
+- DC-004 pause moved to eligible release; UI approval path via `complete_release_after_optional_ui_approval`.
+- Dashboard: `?approval=` deep link on cycle map; `tests/e2e/mvp-chained.spec.ts` (opt-in live); `scripts/demo/resume_mvp_pause.py`.

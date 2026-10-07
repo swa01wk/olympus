@@ -11,9 +11,11 @@ def test_agents_no_persistence_contract(project_root: Path | None = None) -> Non
     root = project_root or Path(__file__).resolve().parents[2]
     violation = root / "agents" / "_import_violation_probe.py"
     violation.write_text("from core.db import Base\n", encoding="utf-8")
+    lint_imports = root / ".venv" / "bin" / "lint-imports"
+    cmd = [str(lint_imports)] if lint_imports.is_file() else ["uv", "run", "lint-imports"]
     try:
         result = subprocess.run(
-            ["uv", "run", "lint-imports"],
+            cmd,
             cwd=root,
             capture_output=True,
             text=True,

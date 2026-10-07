@@ -16,7 +16,7 @@ Tracks **Missing** and **Derivable** items from Phase 0. Each entry states how t
 | G10 | REMEDIATION journey (`DeliveryCycleType.REMEDIATION`) | **Backend only** | Not in design four-journey pack; show cycle with generic map or “Journey not in design pack” empty state if encountered. |
 | G11 | OpenAPI codegen in CI | **Missing tooling in repo** | Hand-written or locally generated types under `apps/dashboard/src/api/` from router models; refresh when backend changes. |
 | G12 | Dashboard env in root `.env.example` | **Missing** | Document `NEXT_PUBLIC_OLYMPUS_API_URL` in `apps/dashboard/README.md` only. |
-| G13 | Playwright CI job | **Addressed (dashboard workflow)** | `.github/workflows/dashboard.yml` runs `npm run check` + `npm run test:e2e` on `apps/dashboard/` changes. Plan 19 chained walkthrough spec still **TODO** (see `MVP-OPERATOR-UI.md` §3). |
+| G13 | Playwright CI job | **Addressed (dashboard workflow)** | `.github/workflows/dashboard.yml` runs `npm run check` + stubbed `npm run test:e2e`. Live chained R3 spec: `tests/e2e/mvp-chained.spec.ts` (opt-in `MVP_E2E_LIVE=1`; see `MVP-OPERATOR-UI.md` §3). |
 | G14 | Spec-code links single endpoint | **Partial** | S06 may require N+1 fetches; show loading per section. |
 | G15 | Lease entity exposed separately | **Partial** | Show lease fields from execution/snapshot JSON when present; else “Lease detail unavailable”. |
 

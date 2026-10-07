@@ -1,0 +1,54 @@
+project_name: SupportDesk Defect Trusted
+feature_key: FEAT-TICKETS
+feature_name: Create and manage tickets
+spec_lineage: SPEC-FEAT-TICKETS
+implementation_spec_lineage: SPEC-IMPL-FEAT-TICKETS
+baseline_set_key: B1
+
+feature_spec:
+  behavior: Create and update tickets via HTTP API
+  summary: Ticket management
+  inputs:
+    - title
+    - status
+  outputs:
+    - ticket
+  rules:
+    - default ticket status is OPEN
+    - closed tickets cannot change status via PATCH
+  constraints: []
+
+acceptance_criteria:
+  - lineage_key: AC-TICKET-CREATE
+    statement: Client can create a ticket with title and OPEN status
+    given: a valid ticket payload
+    when: POST /tickets
+    then: response is 201 and ticket is persisted
+    mandatory: true
+    evidence_requirement: EXECUTABLE
+  - lineage_key: AC-TICKET-CLOSED-UPDATE-409
+    statement: Updating a CLOSED ticket is rejected with HTTP 409
+    given: an existing CLOSED ticket
+    when: PATCH /tickets/{id} with a new status
+    then: response is 409 Conflict
+    mandatory: true
+    evidence_requirement: EXECUTABLE
+
+spec_code_links:
+  - ac_lineage_key: AC-TICKET-CREATE
+    code_stable_key: ROUTE:POST /tickets
+    relation: VERIFIES
+  - ac_lineage_key: AC-TICKET-CLOSED-UPDATE-409
+    code_stable_key: ROUTE:PATCH /tickets/{ticket_id}
+    relation: VERIFIES
+  - ac_lineage_key: AC-TICKET-CLOSED-UPDATE-409
+    code_stable_key: FUNC:TicketService.update_status
+    relation: VERIFIES
+
+baselines:
+  - lineage_key: BL-TICKET-CREATE
+    ac_lineage_key: AC-TICKET-CREATE
+    check_ref: tests/test_tickets_api.py::test_create_ticket
+    given: API client
+    when: POST /tickets with title Help
+    then: HTTP 201

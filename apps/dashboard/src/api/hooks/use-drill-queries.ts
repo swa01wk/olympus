@@ -1,5 +1,6 @@
 "use client";
 
+import { taskPlanBodyToDag, type TaskPlanBody } from "@/lib/task-plan-dag";
 import { isApiError } from "@/src/api/client";
 import { queryKeys } from "@/src/api/query-keys";
 import {
@@ -24,8 +25,11 @@ import {
   fetchTaskContract,
   fetchTaskDag,
   fetchTaskEligibility,
+  fetchTaskPlan,
+  fetchTaskPlans,
 } from "@/src/api/resources";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export function useProjectCoverage(projectId: string | undefined) {
   return useQuery({
@@ -57,6 +61,47 @@ export function useTaskDag(cycleId: string | undefined) {
     queryFn: () => fetchTaskDag(cycleId!),
     enabled: Boolean(cycleId),
   });
+}
+
+/** Materialized task DAG, or proposed tasks from the latest task plan when none exist yet. */
+export function useTaskDagView(cycleId: string | undefined) {
+  const dag = useTaskDag(cycleId);
+  const materializedCount = dag.data?.nodes?.length ?? 0;
+
+  const plans = useQuery({
+    queryKey: queryKeys.taskPlans.list(cycleId ?? ""),
+    queryFn: () => fetchTaskPlans(cycleId!),
+    enabled: Boolean(cycleId) && !dag.isLoading && materializedCount === 0,
+  });
+
+  const bestPlan = plans.data?.find((p) => p.task_count > 0) ?? plans.data?.[0];
+
+  const planDetail = useQuery({
+    queryKey: queryKeys.taskPlans.detail(bestPlan?.id ?? ""),
+    queryFn: () => fetchTaskPlan(bestPlan!.id),
+    enabled: Boolean(bestPlan?.id) && materializedCount === 0,
+  });
+
+  const previewDag = useMemo(() => {
+    if (materializedCount > 0 || !planDetail.data?.body) return null;
+    return taskPlanBodyToDag(planDetail.data.body as TaskPlanBody);
+  }, [materializedCount, planDetail.data]);
+
+  const nodes =
+    materializedCount > 0 ? (dag.data?.nodes ?? []) : (previewDag?.nodes ?? []);
+  const edges =
+    materializedCount > 0 ? (dag.data?.edges ?? []) : (previewDag?.edges ?? []);
+
+  return {
+    nodes,
+    edges,
+    isPreview: materializedCount === 0 && nodes.length > 0,
+    planStatus: planDetail.data?.status ?? bestPlan?.status,
+    isLoading:
+      dag.isLoading || (materializedCount === 0 && (plans.isLoading || planDetail.isLoading)),
+    isError: dag.isError,
+    error: dag.error,
+  };
 }
 
 export function useTaskContract(taskId: string | undefined) {

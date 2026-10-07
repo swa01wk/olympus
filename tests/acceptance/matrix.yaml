@@ -1,0 +1,181 @@
+# ARCH §22 (24 rows) + TECH §31 (13 rows) → pytest / Playwright node IDs (Phase 19 §4.8).
+- id: ARCH22-01
+  source: ARCH_22
+  description: Olympus owns canonical state
+  tests:
+    - tests.persistence.test_transition_atomicity::test_illegal_transition_rolls_back
+- id: ARCH22-02
+  source: ARCH_22
+  description: Runtime cannot mutate lifecycle directly
+  tests:
+    - tests.unit.test_import_linter::test_agents_do_not_import_persistence
+- id: ARCH22-03
+  source: ARCH_22
+  description: Project and DeliveryCycle distinct
+  tests:
+    - tests.persistence.test_kernel_flow::test_create_project_and_cycle
+- id: ARCH22-04
+  source: ARCH_22
+  description: Task and Execution distinct
+  tests:
+    - tests.persistence.test_execution_admission::test_retry_creates_new_execution
+- id: ARCH22-05
+  source: ARCH_22
+  description: TaskContract versioned
+  tests:
+    - tests.persistence.test_contract_immutability::test_contract_version_immutable
+- id: ARCH22-06
+  source: ARCH_22
+  description: ExecutionSnapshot immutable
+  tests:
+    - tests.persistence.test_snapshot_immutability::test_snapshot_hash_stable
+- id: ARCH22-07
+  source: ARCH_22
+  description: IntegrationCandidate promotion atomic
+  tests:
+    - tests.persistence.test_ic_promote_atomicity::test_promote_is_atomic
+- id: ARCH22-08
+  source: ARCH_22
+  description: Release eligibility deterministic
+  tests:
+    - tests.unit.test_release_eligibility_truth_table::test_greenfield_required_conditions
+- id: ARCH22-09
+  source: ARCH_22
+  description: Gates finalized by policy engine
+  tests:
+    - tests.unit.assurance.test_gate_finalizer::test_gate_finalizer_pure
+- id: ARCH22-10
+  source: ARCH_22
+  description: Evidence immutability
+  tests:
+    - tests.persistence.test_assurance_immutability::test_evidence_rows_immutable
+- id: ARCH22-11
+  source: ARCH_22
+  description: Inbound webhook idempotency
+  tests:
+    - tests.unit.integrations.test_hmac_auth::test_hmac_valid_signature
+- id: ARCH22-12
+  source: ARCH_22
+  description: Connector governance via ToolGateway
+  tests:
+    - tests.connector.test_gitea_connector::test_create_pr_idempotent
+- id: ARCH22-13
+  source: ARCH_22
+  description: Brownfield recovered spec isolation
+  tests:
+    - tests.journey.test_brownfield_supportdesk::test_brownfield_supportdesk_ready_for_change
+- id: ARCH22-14
+  source: ARCH_22
+  description: Feature change spec delta path
+  tests:
+    - tests.journey.test_feature_change_supportdesk::test_feature_change_supportdesk_end_to_end
+- id: ARCH22-15
+  source: ARCH_22
+  description: Bug fix reproduction before repair
+  tests:
+    - tests.journey.test_bug_fix_supportdesk::test_bug_fix_supportdesk_end_to_end
+- id: ARCH22-16
+  source: ARCH_22
+  description: Code index canonical pointer
+  tests:
+    - tests.integration.code_index.test_golden_supportdesk::test_supportdesk_r1_golden_index
+- id: ARCH22-17
+  source: ARCH_22
+  description: Traceability forward/back
+  tests:
+    - tests.integration.traceability.test_lineage_queries::test_forward_lineage
+- id: ARCH22-18
+  source: ARCH_22
+  description: Audit chain per project
+  tests:
+    - tests.persistence.test_audit_chain::test_audit_chain_verify
+- id: ARCH22-19
+  source: ARCH_22
+  description: Recovery RC scenarios
+  tests:
+    - tests.recovery.test_rc_scenarios::test_rc02_langgraph_truncate_resume
+- id: ARCH22-20
+  source: ARCH_22
+  description: Security prompt injection resistance
+  tests:
+    - tests.security.test_prompt_injection_forge::test_forge_ignores_instruction_override
+- id: ARCH22-21
+  source: ARCH_22
+  description: Live LLM router proof
+  tests:
+    - tests.integration.live_llm.test_model_router_live::test_structured_echo_live
+- id: ARCH22-22
+  source: ARCH_22
+  description: Greenfield journey R1
+  tests:
+    - tests.journey.test_greenfield_supportdesk::test_greenfield_supportdesk_end_to_end
+- id: ARCH22-23
+  source: ARCH_22
+  description: Issue tracker feature change
+  tests:
+    - tests.journey.test_feature_change_via_issue_tracker::test_feature_change_via_issue_tracker
+- id: ARCH22-24
+  source: ARCH_22
+  description: Chained four-journey MVP
+  tests:
+    - tests.journey.test_mvp_chained_supportdesk::test_mvp_chained_supportdesk
+- id: TECH31-01
+  source: TECH_31
+  description: Postgres canonical store
+  tests:
+    - tests.integration.test_db_and_migrations::test_migrations_roundtrip
+- id: TECH31-02
+  source: TECH_31
+  description: Async SQLAlchemy session factory
+  tests:
+    - tests.persistence.test_kernel_flow::test_create_project_and_cycle
+- id: TECH31-03
+  source: TECH_31
+  description: Command bus idempotency
+  tests:
+    - tests.persistence.test_idempotency::test_duplicate_idempotency_key
+- id: TECH31-04
+  source: TECH_31
+  description: LangGraph runtime non-authoritative
+  tests:
+    - tests.unit.runtime.test_langgraph_runtime::test_resume_from_continuation_without_checkpoint
+- id: TECH31-05
+  source: TECH_31
+  description: Model router live guard
+  tests:
+    - tests.unit.runtime.test_model_router::test_fake_provider_blocked_in_journey_env
+- id: TECH31-06
+  source: TECH_31
+  description: Execution lease semantics
+  tests:
+    - tests.persistence.test_execution_lease::test_lease_expiry_marks_failed
+- id: TECH31-07
+  source: TECH_31
+  description: Worktree isolation
+  tests:
+    - tests.integration.repositories.test_worktree_manager::test_worktree_create_and_cleanup
+- id: TECH31-08
+  source: TECH_31
+  description: Repository materialization
+  tests:
+    - tests.integration.repositories.test_materialization::test_materialize_external_clone
+- id: TECH31-09
+  source: TECH_31
+  description: Incremental code index
+  tests:
+    - tests.integration.code_index.test_incremental::test_incremental_reindex
+- id: TECH31-10
+  source: TECH_31
+  description: Impact hybrid retrieval
+  tests:
+    - tests.integration.impact.test_hybrid_search_labels::test_structural_labels_present
+- id: TECH31-11
+  source: TECH_31
+  description: Observability ready endpoint
+  tests:
+    - tests.integration.test_ready_sandbox::test_ready_reports_sandbox
+- id: TECH31-12
+  source: TECH_31
+  description: Encrypted secret store
+  tests:
+    - tests.integration.integrations.test_secret_store::test_secret_store_encrypted_not_plaintext

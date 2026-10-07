@@ -1,0 +1,18 @@
+version: 1
+categories:
+  python:
+    binaries: [python, python3]
+  pytest:
+    binaries: [pytest]
+  ruff:
+    binaries: [ruff]
+  mypy:
+    binaries: [mypy]
+  compile:
+    binaries: [python, python3]
+defaults:
+  timeout_s: 300
+  max_output_bytes: 500000
+  network: false
+disabled_categories:
+  - pip

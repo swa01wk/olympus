@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: olympus
+          POSTGRES_PASSWORD: olympus
+          POSTGRES_DB: olympus
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U olympus -d olympus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://olympus:olympus@localhost:5432/olympus
+      OLYMPUS_ENV: test
+      OLYMPUS_STORAGE_ROOT: ./var/olympus
+      OLYMPUS_WORKSPACE_ROOT: ./var/olympus/workspaces
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-groups
+      - run: make lint
+      - run: make typecheck
+      - run: uv run alembic upgrade head
+      - run: make test-unit
+      - run: make test-persistence
+      - run: make test-integration
+
+  live:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Live LLM lane placeholder (Phase 02+)"

@@ -16,6 +16,10 @@ export const queryKeys = {
     detail: (taskId: string) => ["tasks", "detail", taskId] as const,
     dag: (cycleId: string) => ["views", "task-dag", cycleId] as const,
   },
+  taskPlans: {
+    list: (cycleId: string) => ["task-plans", "cycle", cycleId] as const,
+    detail: (planId: string) => ["task-plans", "detail", planId] as const,
+  },
   executions: {
     byTask: (taskId: string) => ["executions", "task", taskId] as const,
   },

@@ -27,6 +27,7 @@ type OperatorDialogsValue = {
   setShellContext: (ctx: ShellContext) => void;
   openIntake: () => void;
   openAskOlympus: () => void;
+  openApproval: (approvalId: string) => void;
   openAttentionItem: (item: AttentionItem) => void;
   openCycleCommand: (req: CycleCommandRequest) => void;
 };
@@ -53,6 +54,10 @@ export function OperatorDialogsProvider({ children }: { children: ReactNode }) {
     setShell(ctx);
   }, []);
 
+  const openApproval = useCallback((id: string) => {
+    setApprovalId(id);
+  }, []);
+
   const openAttentionItem = useCallback((item: AttentionItem) => {
     if (item.kind === "APPROVAL") setApprovalId(item.id);
     else if (item.kind === "CLARIFICATION") setClarificationId(item.id);
@@ -63,10 +68,11 @@ export function OperatorDialogsProvider({ children }: { children: ReactNode }) {
       setShellContext,
       openIntake: () => setIntakeOpen(true),
       openAskOlympus: () => setAskOpen(true),
+      openApproval,
       openAttentionItem,
       openCycleCommand: setCycleCommand,
     }),
-    [setShellContext, openAttentionItem],
+    [setShellContext, openApproval, openAttentionItem],
   );
 
   return (

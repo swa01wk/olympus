@@ -1,0 +1,31 @@
+defaults:
+  provider: ${MODEL_PROVIDER}
+  max_output_tokens: 4096
+  temperature: 0.0
+  max_schema_retries: 2
+  max_transport_retries: 3
+
+retention:
+  store_prompts: hash_only
+  store_responses: structured_only
+
+aliases:
+  product_decomposition:
+    model_env: MODEL_PRODUCT_REASONING
+  planning:
+    model_env: MODEL_PLANNING
+  architecture:
+    model_env: MODEL_ARCHITECTURE_REASONING
+  repository_reasoning:
+    model_env: MODEL_REPOSITORY_REASONING
+  implementation:
+    model_env: MODEL_CODE_IMPLEMENTATION
+  review:
+    model_env: MODEL_CODE_REVIEW
+  verification_planning:
+    model_env: MODEL_VERIFICATION
+  orchestration:
+    model_env: MODEL_ORCHESTRATION
+  embedding:
+    model_env: MODEL_EMBEDDING
+    provider: openai

@@ -1,0 +1,19 @@
+{
+  "title": "Olympus Delivery Flow",
+  "uid": "olympus-delivery",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Scheduler queue depth",
+      "targets": [{ "expr": "sum(olympus_scheduler_queue_depth)" }]
+    },
+    {
+      "type": "stat",
+      "title": "Lease expiries",
+      "targets": [{ "expr": "sum(increase(olympus_lease_expiries_total[1h]))" }]
+    }
+  ]
+}

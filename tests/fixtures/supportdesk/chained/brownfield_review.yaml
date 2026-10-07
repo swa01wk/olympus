@@ -1,0 +1,18 @@
+# Chained MVP brownfield review (property-based rules, Phase 19 §4.2).
+promote_specs_with:
+  - principal_has_route_with_tests: true
+defer_or_accept_gap:
+  route_paths:
+    - /escalate
+approve:
+  recovered_architecture: true
+matched:
+  decision: CONFIRM_EXISTING
+new_with_tests:
+  decision: PROMOTE_AS_CANONICAL
+new_without_tests:
+  decision: DEFER
+divergent:
+  decision: REJECT_AS_NOT_INTENDED
+missing:
+  decision: ACCEPT_KNOWN_GAP

@@ -1,0 +1,19 @@
+{
+  "title": "Olympus LLM Usage & Cost",
+  "uid": "olympus-llm",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Tokens by alias",
+      "targets": [{ "expr": "sum by (alias) (rate(olympus_llm_tokens_total[5m]))" }]
+    },
+    {
+      "type": "stat",
+      "title": "Schema failures",
+      "targets": [{ "expr": "sum(increase(olympus_llm_schema_failures_total[1h]))" }]
+    }
+  ]
+}

@@ -22,7 +22,7 @@ import type { LensId } from "@/src/control-plane/lanes";
 import { laneForCycleState, ribbonStages, stageIndex, stagesForCycleType } from "@/src/control-plane/stage-lanes";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AttentionItem } from "@/src/control-plane/attention";
 import { useOperatorDialogs } from "@/components/providers/OperatorDialogsProvider";
 import { StreamDisconnectedNotice } from "@/components/truth/StreamDisconnectedNotice";
@@ -40,6 +40,13 @@ export function CycleMapScreen({ projectId, cycleId }: { projectId: string; cycl
 
   const queryClient = useQueryClient();
   const operator = useOperatorDialogs();
+  const openedApprovalFromQuery = useRef<string | null>(null);
+  const approvalFromQuery = searchParams.get("approval");
+  useEffect(() => {
+    if (!approvalFromQuery || openedApprovalFromQuery.current === approvalFromQuery) return;
+    openedApprovalFromQuery.current = approvalFromQuery;
+    operator.openApproval(approvalFromQuery);
+  }, [approvalFromQuery, operator]);
   const project = useProject(projectId);
   const cycles = useDeliveryCycles(projectId);
   const cp = useControlPlaneGraph(cycleId);

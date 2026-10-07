@@ -1,0 +1,60 @@
+# Phase 19 MVP demo stack (plan §4.1).
+# Usage:
+#   docker compose -f docker-compose.yml -f deploy/compose.test.yaml \
+#     -f deploy/compose.demo.yaml --profile integrations --profile demo up -d
+#
+services:
+  control-api:
+    profiles: ["demo"]
+    env_file:
+      - .env
+    environment:
+      OLYMPUS_ENV: journey
+      GIT_PROVIDER: gitea
+      LLM_LIVE_TESTS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  scheduler-worker:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: deploy/worker.Dockerfile
+    command: ["python", "-m", "apps.scheduler_worker.main"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://olympus:olympus@postgres:5432/olympus
+      OLYMPUS_ENV: journey
+      LLM_LIVE_TESTS: "1"
+      OLYMPUS_STORAGE_ROOT: /data/olympus
+      OLYMPUS_WORKSPACE_ROOT: /data/workspaces
+      OLYMPUS_SANDBOX: bwrap
+    volumes:
+      - olympus_workspace:/data/workspaces
+      - olympus_storage:/data/olympus
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  execution-worker:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: deploy/worker.Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://olympus:olympus@postgres:5432/olympus
+      OLYMPUS_ENV: journey
+      LLM_LIVE_TESTS: "1"
+      OLYMPUS_STORAGE_ROOT: /data/olympus
+      OLYMPUS_WORKSPACE_ROOT: /data/workspaces
+      OLYMPUS_SANDBOX: bwrap
+    volumes:
+      - olympus_workspace:/data/workspaces
+      - olympus_storage:/data/olympus
+    depends_on:
+      postgres:
+        condition: service_healthy

@@ -1,0 +1,1 @@
+"""Execution snapshot construction."""

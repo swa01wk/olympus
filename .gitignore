@@ -12,3 +12,12 @@ htmlcov/
 .coverage
 dist/
 build/
+
+# macOS Finder duplicate copies (e.g. "file 2.py", "README 3.md")
+* 2.*
+* 3.*
+.dockerignore 2
+Dockerfile 2
+Dockerfile 3
+Makefile 2
+Makefile 3

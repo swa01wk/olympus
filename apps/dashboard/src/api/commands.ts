@@ -315,6 +315,28 @@ export async function runImpactAssessment(
   });
 }
 
+export async function proposeArchitectureDelta(cycleId: string, idempotencyKey?: string) {
+  return apiRequest<Record<string, string>>(
+    `/delivery-cycles/${cycleId}/architecture-delta/propose`,
+    { method: "POST", idempotencyKey: idempotencyKey ?? newIdempotencyKey() },
+  );
+}
+
+export async function declineArchitectureDelta(
+  cycleId: string,
+  note: string,
+  idempotencyKey?: string,
+) {
+  return apiRequest<{ approval_id: string }>(
+    `/delivery-cycles/${cycleId}/architecture-delta/decline`,
+    {
+      method: "POST",
+      body: { note },
+      idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+    },
+  );
+}
+
 export async function acceptTaskPlan(planId: string, idempotencyKey?: string) {
   return apiRequest<{ id: string; status: string }>(`/task-plans/${planId}/commands/accept`, {
     method: "POST",

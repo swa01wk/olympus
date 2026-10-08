@@ -13,6 +13,8 @@ import {
   generateTaskPlan,
   postOrchestratorTurn,
   proposeArchitecture,
+  proposeArchitectureDelta,
+  declineArchitectureDelta,
   putSecret,
   registerRepository,
   requestApproval,
@@ -204,6 +206,29 @@ describe("C1 studio reads", () => {
     const fetchMock = mockFetchJson('{"id":"s1","turns":[]}');
     await fetchOrchestratorSession("sess-1");
     expect(firstCall(fetchMock)[0]).toContain("/orchestrator/sessions/sess-1");
+  });
+});
+
+describe("RL1.5 architecture delta client", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("proposeArchitectureDelta", async () => {
+    const fetchMock = mockFetchJson('{"status":"scheduled"}');
+    await proposeArchitectureDelta("cycle-fc", "idem-ad");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/delivery-cycles/cycle-fc/architecture-delta/propose");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-ad");
+  });
+
+  it("declineArchitectureDelta", async () => {
+    const fetchMock = mockFetchJson('{"approval_id":"apr-1"}');
+    await declineArchitectureDelta("cycle-fc", "No structural change needed", "idem-dec");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/delivery-cycles/cycle-fc/architecture-delta/decline");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ note: "No structural change needed" });
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-dec");
   });
 });
 

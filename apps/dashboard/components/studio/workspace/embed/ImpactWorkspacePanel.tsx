@@ -18,9 +18,6 @@ export function ImpactWorkspacePanel({ cycleId }: { cycleId: string }) {
       {impact.data && (
         <>
           <p className="ol-body-sm">{String(impact.data.summary ?? "")}</p>
-          {Boolean(impact.data.architecture_delta_suggested) && (
-            <p className="ol-body-sm text-[var(--warning)]">Architecture delta suggested.</p>
-          )}
           {Object.entries(itemsByType).map(([type, items]) => (
             <div key={type} className="mb-3">
               <h4 className="ol-label">{type}</h4>

@@ -31,10 +31,18 @@ class SessionResponse(BaseModel):
     expires_at: str
 
 
+class FocusBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject_type: str
+    subject_id: uuid.UUID
+
+
 class TurnBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     message: str = Field(min_length=1, max_length=8000)
+    focus: FocusBody | None = None
 
 
 def _session_resp(row: OrchestratorSession) -> SessionResponse:
@@ -94,4 +102,13 @@ async def post_turn(
         idempotency_key=ctx.idempotency_key,
         command_log_id=ctx.command_log_id,
     )
-    return await svc.append_user_turn(session, orch, body.message, ctx)
+    focus = None
+    if body.focus is not None:
+        focus = {
+            "subject_type": body.focus.subject_type,
+            "subject_id": str(body.focus.subject_id),
+        }
+    try:
+        return await svc.append_user_turn(session, orch, body.message, ctx, focus=focus)
+    except ValueError as exc:
+        raise DomainError(code="INVALID_INPUT", message=str(exc)) from exc

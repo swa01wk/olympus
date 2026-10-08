@@ -1,7 +1,12 @@
 import uuid
 
 import pytest
-from agents.orchestrator.schemas import ClarificationAnswerDraft, OrchestratorTurn, ProposedCommand
+from agents.orchestrator.schemas import (
+    ClarificationAnswerDraft,
+    OrchestratorTurn,
+    ProposedCommand,
+    RevisionNoteDraft,
+)
 from core.domain.actors.models import Actor
 from core.domain.enums import ActorKind, ActorRole
 from core.orchestrator.validator import OrchestratorValidationError, validate_turn
@@ -57,6 +62,21 @@ def test_known_open_clarification_accepted() -> None:
     )
     assert validate_turn(turn, actor=actor, open_clarification_ids={cid}).intent == (
         "ANSWER_CLARIFICATION"
+    )
+
+
+def test_revision_note_draft_requires_pending_approval() -> None:
+    actor = Actor(kind=ActorKind.HUMAN, name="rev", roles=[ActorRole.OPERATOR.value])
+    aid = str(uuid.uuid4())
+    turn = OrchestratorTurn(
+        intent="REVISION_NOTE_DRAFT",
+        message="note",
+        revision_note_draft=RevisionNoteDraft(approval_id=aid, note="fix guard"),
+    )
+    with pytest.raises(OrchestratorValidationError, match="UNKNOWN_APPROVAL"):
+        validate_turn(turn, actor=actor, pending_approval_ids=set())
+    assert (
+        validate_turn(turn, actor=actor, pending_approval_ids={aid}).intent == "REVISION_NOTE_DRAFT"
     )
 
 

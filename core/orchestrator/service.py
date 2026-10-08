@@ -12,6 +12,7 @@ from core.domain.events.append import append_domain_event
 from core.domain.task_contracts.models import TaskContract
 from core.domain.task_contracts.schemas import TaskContractBody, VersionedRef
 from core.domain.tasks.service import TaskService
+from core.orchestrator.focus import FOCUS_SUBJECT_TYPES, load_focus
 from core.orchestrator.models import OrchestratorSession
 from core.orchestrator.validator import OrchestratorValidationError, validate_turn
 from core.scheduler.admission import AdmissionService
@@ -80,9 +81,16 @@ class OrchestratorService:
         orch_session: OrchestratorSession,
         message: str,
         ctx: CommandContext,
+        *,
+        focus: dict[str, str] | None = None,
     ) -> dict[str, str]:
         turns = list(orch_session.turns or [])
-        turns.append({"role": "user", "text": message})
+        user_turn: dict[str, object] = {"role": "user", "text": message}
+        if focus is not None:
+            if focus.get("subject_type") not in FOCUS_SUBJECT_TYPES:
+                raise ValueError("invalid focus subject_type")
+            user_turn["focus"] = focus
+        turns.append(user_turn)
         orch_session.turns = turns
         await session.flush()
         if orch_session.delivery_cycle_id is None:
@@ -102,8 +110,23 @@ class OrchestratorService:
         turn: OrchestratorTurn,
         ctx: CommandContext,
     ) -> None:
+        inbox = await build_inbox_view(
+            session,
+            ctx,
+            project_id=orch_session.project_id,
+            delivery_cycle_id=orch_session.delivery_cycle_id,
+        )
+        open_clarification_ids = {
+            item["id"] for item in inbox if item.get("kind") == "CLARIFICATION"
+        }
+        pending_approval_ids = {item["id"] for item in inbox if item.get("kind") == "APPROVAL"}
         try:
-            validated = validate_turn(turn, actor=ctx.actor)
+            validated = validate_turn(
+                turn,
+                actor=ctx.actor,
+                open_clarification_ids=open_clarification_ids,
+                pending_approval_ids=pending_approval_ids,
+            )
         except OrchestratorValidationError:
             from core.commands.catalog import export_command_catalog
 
@@ -123,6 +146,11 @@ class OrchestratorService:
                 )
                 if validated.clarification_answer_draft
                 else None,
+                "revision_note_draft": validated.revision_note_draft.model_dump(mode="json")
+                if validated.revision_note_draft
+                else None,
+                "navigate_to": validated.navigate_to,
+                "refs": list(validated.refs),
             }
         )
         orch_session.turns = turns
@@ -148,21 +176,36 @@ class OrchestratorService:
         orch_session: OrchestratorSession,
         ctx: CommandContext,
     ) -> dict[str, Any]:
-        overview: dict[str, Any] = {}
+        project_overview: dict[str, Any] | None = None
+        cycle_overview: dict[str, Any] | None = None
+        if orch_session.delivery_cycle_id:
+            cycle_overview = await build_cycle_overview(
+                session, orch_session.delivery_cycle_id, ctx
+            )
         if orch_session.project_id:
-            overview = await build_project_overview(session, orch_session.project_id, ctx)
-        elif orch_session.delivery_cycle_id:
-            overview = await build_cycle_overview(session, orch_session.delivery_cycle_id, ctx)
+            project_overview = await build_project_overview(session, orch_session.project_id, ctx)
+        overview = cycle_overview if cycle_overview is not None else (project_overview or {})
         inbox = await build_inbox_view(
             session,
             ctx,
             project_id=orch_session.project_id,
             delivery_cycle_id=orch_session.delivery_cycle_id,
         )
+        focus_payload: dict[str, Any] | None = None
+        raw_focus = _focus_from_turns(orch_session.turns)
+        if raw_focus is not None:
+            focus_payload = await load_focus(
+                session,
+                raw_focus["subject_type"],
+                uuid.UUID(raw_focus["subject_id"]),
+            )
         from core.commands.catalog import export_command_catalog
 
         return {
             "overview": overview,
+            "project_overview": project_overview,
+            "cycle_overview": cycle_overview,
+            "focus": focus_payload,
             "inbox": inbox,
             "command_catalog": export_command_catalog(),
             "session_turns": orch_session.turns,
@@ -220,6 +263,20 @@ class OrchestratorService:
             session, task.id, await _system_command_context(session, ctx.correlation_id)
         )
         return str(execution.id)
+
+
+def _focus_from_turns(turns: list[dict[str, Any]] | None) -> dict[str, str] | None:
+    for turn in reversed(turns or []):
+        if turn.get("role") != "user":
+            continue
+        focus = turn.get("focus")
+        if not isinstance(focus, dict):
+            continue
+        subject_type = focus.get("subject_type")
+        subject_id = focus.get("subject_id")
+        if isinstance(subject_type, str) and isinstance(subject_id, str):
+            return {"subject_type": subject_type, "subject_id": subject_id}
+    return None
 
 
 def fallback_turn(catalog: dict[str, Any]) -> OrchestratorTurn:

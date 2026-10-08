@@ -23,6 +23,7 @@ def validate_turn(
     *,
     actor: Actor,
     open_clarification_ids: set[str] | frozenset[str] | None = None,
+    pending_approval_ids: set[str] | frozenset[str] | None = None,
 ) -> OrchestratorTurn:
     if turn.intent == "PROPOSE_COMMAND" and turn.proposed_command is not None:
         validate_proposed_command(turn.proposed_command, actor=actor)
@@ -33,6 +34,15 @@ def validate_turn(
             cid = turn.clarification_answer_draft.clarification_id
             if cid not in open_clarification_ids:
                 raise OrchestratorValidationError([f"UNKNOWN_CLARIFICATION:{cid}"])
+    if turn.intent == "REVISION_NOTE_DRAFT":
+        if turn.revision_note_draft is None:
+            raise OrchestratorValidationError(["REVISION_NOTE_DRAFT_REQUIRED"])
+        if not turn.revision_note_draft.note.strip():
+            raise OrchestratorValidationError(["REVISION_NOTE_REQUIRED"])
+        if pending_approval_ids is not None:
+            aid = turn.revision_note_draft.approval_id
+            if aid not in pending_approval_ids:
+                raise OrchestratorValidationError([f"UNKNOWN_APPROVAL:{aid}"])
     return turn
 
 

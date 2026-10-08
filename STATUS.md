@@ -2261,6 +2261,7 @@ Planning-time source reconciliations are recorded in `plans/README.md` §2 (D-01
 | 2026-10-05 | **STATUS sync (Phase 14):** §10 Feature Change invariants + §11 MVP DoD; §10 Live LLM table (`change_interpret`, Forge retry, journey **3**); **`make verify-phase-14`** / **`verify-phase-14-exit`**; Phase **14** deliverables, REST, follow-ups **P14-F01** / **P14-19**, implementation record. |
 | 2026-10-05 | **Phase 15 COMPLETE (exit):** migrations **`0028`–`0029`**; bug-fix kernel + reproduction/regression; journey **`test_bug_fix_supportdesk.py`** live PASS; lint/mypy fixes; **`bootstrap_bug_fix_to_root_cause`** + POST_REPAIR integration chain; sequential **`make migrate/lint/check/typecheck`** green; Phase 15 pytest **13/13**; §1–§2 → **15/20**; Journey 4 milestone **PARTIAL** (isolated; Phase **19** chained pending). |
 | 2026-10-05 | **Phase 15 gap closure + verify sign-off:** bug-fix prompt front matter; **`_snapshot`** in execution snapshots; worker bug-fix **artifact:** outputs; triage signature normalization; duplicate reproduction/evidence hardening; expanded §12 tests (**`live_llm/defects`**, eligibility, **`proceed_unreproduced`**, NOT_REPRODUCED R1, artifact immutability); **`make verify-phase-15-exit`** exit **0** (local). |
+| 2026-10-08 | **RL1 COMPLETE (Review loop):** Studio S1–S5 + D1 — brownfield repo register/intake, promotion decisions, findings waive/remediate, architecture-delta panel, defect proceed-unreproduced/reject, per-cycle **`approvalStage`** mapping, request-changes interim UX; plan docs aligned (§17). |
 
 ---
 
@@ -2278,3 +2279,16 @@ Chat + workspace operator UI in `apps/dashboard` per `docs/design/olympus-chat-w
 | C5 | COMPLETE | Decision panel + Next step bar — APPROVER gating, guard truth, cycle commands | — |
 | C6 | COMPLETE | Other journeys — feature change, bug fix, brownfield, remediation stage views | — |
 | C7 | COMPLETE | Playwright `studio-greenfield.spec.ts` @live — greenfield studio path vs Control API | — |
+
+---
+
+## 17. REVIEW LOOP TRACK (RL)
+
+Studio + backend follow-ups per `docs/design/olympus-review-loop-plan.md` and `docs/design/cursor-prompts/RL*.md`.
+
+| Phase | State | Milestone | Blockers |
+|---|---|---|---|
+| RL1 | COMPLETE | Studio-only S1–S5, D1: repo register + brownfield intake, review-queue promotion decisions, findings waive/remediate, impact architecture-delta panel, bug-fix unreproduced/reject + repair-spec Decision panel via **`approvalStage`**, request-changes note UX; **`npm run check`** green | Live four-journey Studio smoke (RL1 phase acceptance); architecture-delta *propose* until RL2 |
+| RL2 | NOT_STARTED | Revision loop, chat focus, auto-requested approvals, architecture-delta persistence, product-spec view, chat generate commands (G1–G4, G11–G13) | — |
+| RL3 | NOT_STARTED | Gates, edits, baselines (G5–G10); EXPECTED_BEHAVIOR and plan acceptance enforcement | — |
+| RL4 | NOT_STARTED | Journey tests + live four-journey Studio run; **`evaluate_mvp.py`** without fallback flags | RL1–RL3 |

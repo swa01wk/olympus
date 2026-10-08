@@ -215,6 +215,14 @@ async def handle_approval_decide(
         if approval.status == ApprovalStatus.APPROVED:
             await ArchitectureService().on_approved(session, approval.subject_id, approval.id, ctx)
     elif (
+        approval.approval_type == ApprovalType.ARCHITECTURE_DELTA
+        and approval.subject_type == "architecture"
+        and approval.status == ApprovalStatus.APPROVED
+    ):
+        from core.planning.architecture.service import ArchitectureService
+
+        await ArchitectureService().on_approved(session, approval.subject_id, approval.id, ctx)
+    elif (
         approval.approval_type == ApprovalType.IMPLEMENTATION_SPEC
         and approval.subject_type == "implementation_spec"
     ):

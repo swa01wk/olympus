@@ -39,19 +39,21 @@ class FeatureChangeCompletionService:
 
             await complete_revision_if_needed(session, execution, cr.id, ctx)
         elif profile == "atlas.architecture_delta":
-            from core.domain.events.append import append_domain_event
+            from agents.atlas.schemas import ArchitectureDeltaProposal
 
-            await append_domain_event(
+            from core.planning.architecture.service import ArchitectureService
+            from core.review.completion import complete_revision_if_needed
+
+            proposal = ArchitectureDeltaProposal.model_validate(output)
+            arch_row = await ArchitectureService().persist_delta(
                 session,
-                aggregate_type="architecture",
-                aggregate_id=cycle.id,
-                event_type="architecture_delta.proposed",
-                payload={"execution_id": str(execution.id)},
-                actor_id=ctx.actor.id,
-                correlation_id=ctx.correlation_id,
                 project_id=cycle.project_id,
                 delivery_cycle_id=cycle.id,
+                proposal=proposal,
+                execution_id=execution.id,
+                ctx=ctx,
             )
+            await complete_revision_if_needed(session, execution, arch_row.id, ctx)
 
     async def maybe_start_impact_after_spec_approval(
         self,

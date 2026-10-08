@@ -61,13 +61,13 @@ Transitions: `POST /delivery-cycles/{id}/commands/{command}` with `{expected_sta
 
 ---
 
-## 3. Backend gaps (record, do not change backend)
+## 3. Backend gaps (record; fixed items noted)
 
 | ID | Gap | UI workaround |
 |---|---|---|
-| B-01 | `complete_turn` stores `intent`, `proposal`, `clarification_answer_draft` but drops `navigate_to` and `refs`, so a NAVIGATE turn can't move the workspace. | Focus the workspace from `proposal.command` / current stage; show `NAVIGATE` turns as text only. Request: persist `navigate_to` and `refs`. |
+| B-01 | **Fixed (RL2.6).** `complete_turn` now persists `navigate_to` and `refs`; Studio applies them via `useStudioFocus`. | — |
 | B-02 | Posting a turn to a session with no `delivery_cycle_id` raises an unhandled `ValueError` (500). | Never open chat without a cycle; the composer's first action in an empty project is "create cycle". |
-| B-03 | Chat can only propose the 22 registered bus commands. Architecture propose, implementation-spec generate, task-plan generate/accept and release are REST-only, so chat cannot propose them. | Chat explains and points at them; the workspace shows the buttons. |
+| B-03 | **Fixed (RL2.9).** Six generation commands (`architecture.propose`, `implementation_specs.generate`, `task_plan.generate`, `change_interpretation.rerun`, `architecture_delta.propose`, `release.create`) are on the bus with proposal → REST mapping. | Proposal cards run the mapped route after confirm. |
 | B-04 | There is no generic `POST /commands`; only `GET /commands/catalog`. | Map each proposable command to its REST route (§6). Unmapped proposals render as "Not runnable from chat". |
 | B-05 | `ApprovalResponse` omits `decision_note`, `decided_by_actor_id`, `decided_at`, `created_at`; `GET /approvals` has no project/cycle filter. | Pending: use `/views/inbox?delivery_cycle_id=`. History: `GET /audit?target_type=approval&target_id=`. |
 | B-06 | No endpoint lists orchestrator sessions for a cycle. | Client keeps the session id (F-03). |
@@ -117,7 +117,7 @@ The backend also has no fake model provider for a running stack (`MODEL_PROVIDER
 | EXPLAIN | Text. Record keys (`TASK-104`, `APR-007`) become links that magnify the owning stage. |
 | PROPOSE_COMMAND | Text + **proposal card**: command, target, args, rationale, the mapped API call (§6), and *Run* / *Dismiss*. *Run* calls the mapped route with a new idempotency key. `delivery_cycle.transition` sends `expected_state` = current state. |
 | ANSWER_CLARIFICATION | Text + **draft answer card** for the clarification: editable answer, *Send answer* → `POST /clarifications/{id}/answer {answer}`. |
-| NAVIGATE | Text only (B-01). |
+| NAVIGATE | Text + workspace focus from persisted `navigate_to` / `refs` (RL2.6). |
 | OUT_OF_SCOPE | Muted text. |
 
 ---

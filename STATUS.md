@@ -2262,6 +2262,7 @@ Planning-time source reconciliations are recorded in `plans/README.md` §2 (D-01
 | 2026-10-05 | **Phase 15 COMPLETE (exit):** migrations **`0028`–`0029`**; bug-fix kernel + reproduction/regression; journey **`test_bug_fix_supportdesk.py`** live PASS; lint/mypy fixes; **`bootstrap_bug_fix_to_root_cause`** + POST_REPAIR integration chain; sequential **`make migrate/lint/check/typecheck`** green; Phase 15 pytest **13/13**; §1–§2 → **15/20**; Journey 4 milestone **PARTIAL** (isolated; Phase **19** chained pending). |
 | 2026-10-05 | **Phase 15 gap closure + verify sign-off:** bug-fix prompt front matter; **`_snapshot`** in execution snapshots; worker bug-fix **artifact:** outputs; triage signature normalization; duplicate reproduction/evidence hardening; expanded §12 tests (**`live_llm/defects`**, eligibility, **`proceed_unreproduced`**, NOT_REPRODUCED R1, artifact immutability); **`make verify-phase-15-exit`** exit **0** (local). |
 | 2026-10-08 | **RL1 COMPLETE (Review loop):** Studio S1–S5 + D1 — brownfield repo register/intake, promotion decisions, findings waive/remediate, architecture-delta panel, defect proceed-unreproduced/reject, per-cycle **`approvalStage`** mapping, request-changes interim UX; plan docs aligned (§17). |
+| 2026-10-08 | **RL2 COMPLETE (Review loop):** revision on CHANGES_REQUESTED, auto-requested approvals, orchestrator focus + Studio revision/diff UI, product-spec view, six chat generation commands; **`test_revision_loop_live.py`** (`live_llm`); chat plan **B-01** / **B-03** marked fixed. |
 
 ---
 
@@ -2289,6 +2290,6 @@ Studio + backend follow-ups per `docs/design/olympus-review-loop-plan.md` and `d
 | Phase | State | Milestone | Blockers |
 |---|---|---|---|
 | RL1 | COMPLETE | Studio-only S1–S5, D1: repo register + brownfield intake, review-queue promotion decisions, findings waive/remediate, impact architecture-delta panel, bug-fix unreproduced/reject + repair-spec Decision panel via **`approvalStage`**, request-changes note UX; **`npm run check`** green | Live four-journey Studio smoke (RL1 phase acceptance); architecture-delta *propose* until RL2 |
-| RL2 | NOT_STARTED | Revision loop, chat focus, auto-requested approvals, architecture-delta persistence, product-spec view, chat generate commands (G1–G4, G11–G13) | — |
+| RL2 | COMPLETE | RL2.1–RL2.10: revision inputs + `RevisionService` on CHANGES_REQUESTED, auto-requested approvals (G11), architecture-delta persistence (RL2.5), orchestrator focus + `revision_note_draft` / `navigate_to` / `refs` (G4), Studio revision SSE + diff UI, `GET /projects/{p}/product-spec`, six chat generation commands + proposal routes; live revision loop test (`test_revision_loop_live.py`, `LLM_LIVE_TESTS=1`); **`make check`** + **`npm run check`** green | RL2 phase acceptance Studio smoke (architecture cite, request-changes diff, propose generate) optional manual |
 | RL3 | NOT_STARTED | Gates, edits, baselines (G5–G10); EXPECTED_BEHAVIOR and plan acceptance enforcement | — |
 | RL4 | NOT_STARTED | Journey tests + live four-journey Studio run; **`evaluate_mvp.py`** without fallback flags | RL1–RL3 |

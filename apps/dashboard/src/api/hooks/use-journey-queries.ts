@@ -14,6 +14,7 @@ import {
   listChangeRequests,
   listDefectReproductions,
   listDefects,
+  listFindings,
   listMaterializations,
   listObservedBehaviors,
   listProjectRepositories,
@@ -153,5 +154,13 @@ export function useRepositoryMaterializations(repositoryId: string | undefined) 
     queryKey: queryKeys.repositories.materializations(repositoryId ?? ""),
     queryFn: () => listMaterializations(repositoryId!),
     enabled: Boolean(repositoryId),
+  });
+}
+
+export function useCycleFindings(cycleId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.journey.findings(cycleId ?? ""),
+    queryFn: () => listFindings(cycleId!),
+    enabled: Boolean(cycleId),
   });
 }

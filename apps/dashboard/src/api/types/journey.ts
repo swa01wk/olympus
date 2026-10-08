@@ -68,6 +68,18 @@ export type ReviewQueueItem = {
   decision: string | null;
 };
 
+export type CycleFinding = {
+  id: string;
+  key: string;
+  delivery_cycle_id: string;
+  category: string;
+  severity: string;
+  blocking: boolean;
+  title: string;
+  status: string;
+  detail: Record<string, unknown>;
+};
+
 export type ReadinessAssessment = {
   id: string;
   delivery_cycle_id: string;

@@ -130,6 +130,20 @@ export type PromotionDecisionBody = {
   note?: string | null;
 };
 
+export async function waiveFinding(findingId: string, idempotencyKey?: string) {
+  return apiRequest<{ approval_id: string }>(`/findings/${findingId}/waive`, {
+    method: "POST",
+    idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
+export async function remediateFinding(findingId: string, idempotencyKey?: string) {
+  return apiRequest<{ task_id: string }>(`/findings/${findingId}/remediate`, {
+    method: "POST",
+    idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
 export async function recordPromotionDecision(
   cycleId: string,
   body: PromotionDecisionBody,

@@ -29,6 +29,7 @@ import type {
   DefectSummary,
   ObservedBehavior,
   ReadinessAssessment,
+  CycleFinding,
   ReviewQueueItem,
 } from "@/src/api/types/journey";
 import type {
@@ -296,6 +297,10 @@ export function getRecoveryProposals(cycleId: string) {
 
 export function getReviewQueue(cycleId: string) {
   return apiRequest<ReviewQueueItem[]>(`/delivery-cycles/${cycleId}/review-queue`);
+}
+
+export function listFindings(cycleId: string) {
+  return apiRequest<CycleFinding[]>(`/delivery-cycles/${cycleId}/findings`);
 }
 
 export function getReadinessAssessment(cycleId: string, recompute = false) {

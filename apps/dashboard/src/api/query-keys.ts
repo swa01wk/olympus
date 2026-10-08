@@ -84,6 +84,7 @@ export const queryKeys = {
     recovery: (cycleId: string) => ["journey", "recovery", cycleId] as const,
     reviewQueue: (cycleId: string) => ["journey", "review-queue", cycleId] as const,
     readiness: (cycleId: string) => ["journey", "readiness", cycleId] as const,
+    findings: (cycleId: string) => ["journey", "findings", cycleId] as const,
   },
   releaseEligibility: (cycleId: string) => ["release", "eligibility", cycleId] as const,
   outcome: (cycleId: string) => ["outcome", cycleId] as const,

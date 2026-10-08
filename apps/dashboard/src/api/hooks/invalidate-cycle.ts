@@ -54,6 +54,7 @@ export function invalidateStudioCycle(
   void queryClient.invalidateQueries({ queryKey: queryKeys.journey.recovery(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.journey.reviewQueue(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.journey.readiness(scope.cycleId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.journey.findings(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.impactLatest(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.knowledge(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.repositories.list(scope.projectId) });

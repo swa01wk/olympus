@@ -20,8 +20,10 @@ import {
   requestImplementationSpecApproval,
   requestScopeApproval,
   recordPromotionDecision,
+  remediateFinding,
   retryMaterialization,
   uploadProductSource,
+  waiveFinding,
 } from "@/src/api/commands";
 import {
   fetchOrchestratorSession,
@@ -43,6 +45,7 @@ import {
   listFeatureSpecs,
   listFeatures,
   listImplementationSpecs,
+  listFindings,
   listMaterializations,
   listProjectRepositories,
   listSources,
@@ -201,6 +204,34 @@ describe("C1 studio reads", () => {
     const fetchMock = mockFetchJson('{"id":"s1","turns":[]}');
     await fetchOrchestratorSession("sess-1");
     expect(firstCall(fetchMock)[0]).toContain("/orchestrator/sessions/sess-1");
+  });
+});
+
+describe("RL1.4 findings client", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("listFindings", async () => {
+    const fetchMock = mockFetchJson("[]");
+    await listFindings("cycle-1");
+    expect(firstCall(fetchMock)[0]).toContain("/delivery-cycles/cycle-1/findings");
+  });
+
+  it("waiveFinding", async () => {
+    const fetchMock = mockFetchJson('{"approval_id":"apr-1"}');
+    await waiveFinding("find-1", "idem-w");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/findings/find-1/waive");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-w");
+  });
+
+  it("remediateFinding", async () => {
+    const fetchMock = mockFetchJson('{"task_id":"task-1"}');
+    await remediateFinding("find-1", "idem-r");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/findings/find-1/remediate");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-r");
   });
 });
 

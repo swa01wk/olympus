@@ -80,6 +80,32 @@ def test_revision_note_draft_requires_pending_approval() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "architecture.propose",
+        "implementation_specs.generate",
+        "task_plan.generate",
+        "change_interpretation.rerun",
+        "architecture_delta.propose",
+        "release.create",
+    ],
+)
+def test_generation_commands_accepted(command: str) -> None:
+    actor = Actor(kind=ActorKind.HUMAN, name="op", roles=[ActorRole.OPERATOR.value])
+    turn = OrchestratorTurn(
+        intent="PROPOSE_COMMAND",
+        message="generate",
+        proposed_command=ProposedCommand(
+            command=command,
+            target_ref=str(uuid.uuid4()),
+            args={"cycle_id": str(uuid.uuid4())},
+            rationale="Run generation step",
+        ),
+    )
+    assert validate_turn(turn, actor=actor).intent == "PROPOSE_COMMAND"
+
+
 def test_approval_decide_blocked() -> None:
     actor = Actor(
         kind=ActorKind.HUMAN,

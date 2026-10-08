@@ -139,6 +139,42 @@ export function routeForProposal(
       };
     case "approval.decide":
       return { notRunnable: "Approvals must be decided in the workspace Decision panel" };
+    case "architecture.propose":
+      return {
+        method: "POST",
+        path: `/delivery-cycles/${ctx.cycleId}/architecture/propose`,
+        body: null,
+      };
+    case "implementation_specs.generate":
+      return {
+        method: "POST",
+        path: `/delivery-cycles/${ctx.cycleId}/implementation-specs/generate`,
+        body: null,
+      };
+    case "task_plan.generate":
+      return {
+        method: "POST",
+        path: `/delivery-cycles/${ctx.cycleId}/task-plan/generate`,
+        body: null,
+      };
+    case "change_interpretation.rerun":
+      return {
+        method: "POST",
+        path: `/delivery-cycles/${ctx.cycleId}/change-interpretation/rerun`,
+        body: null,
+      };
+    case "architecture_delta.propose":
+      return {
+        method: "POST",
+        path: `/delivery-cycles/${ctx.cycleId}/architecture-delta/propose`,
+        body: null,
+      };
+    case "release.create":
+      return {
+        method: "POST",
+        path: `/delivery-cycles/${ctx.cycleId}/release`,
+        body: null,
+      };
     default:
       return { notRunnable: `Not runnable from chat: ${proposal.command}` };
   }

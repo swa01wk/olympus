@@ -115,6 +115,22 @@ describe("routeForProposal §6", () => {
     expect(route).toMatchObject({ path: "/projects/proj-1/defects" });
   });
 
+  it.each([
+    ["architecture.propose", "/architecture/propose"],
+    ["implementation_specs.generate", "/implementation-specs/generate"],
+    ["task_plan.generate", "/task-plan/generate"],
+    ["change_interpretation.rerun", "/change-interpretation/rerun"],
+    ["architecture_delta.propose", "/architecture-delta/propose"],
+    ["release.create", "/release"],
+  ] as const)("generation command %s", (command, pathSuffix) => {
+    const route = routeForProposal(proposal(command), ctx);
+    expect(route).toMatchObject({
+      method: "POST",
+      path: `/delivery-cycles/cycle-2${pathSuffix}`,
+      body: null,
+    });
+  });
+
   it("approval.decide is not runnable", () => {
     const route = routeForProposal(proposal("approval.decide"), ctx);
     expect(route).toEqual({

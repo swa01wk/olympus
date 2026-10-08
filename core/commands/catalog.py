@@ -109,6 +109,69 @@ _CATALOG: list[dict[str, Any]] = [
         "required_roles": [ActorRole.OPERATOR.value],
         "payload_schema": {"type": "object"},
     },
+    {
+        "command": "architecture.propose",
+        "target_type": "delivery_cycle",
+        "required_roles": [ActorRole.OPERATOR.value],
+        "payload_schema": {
+            "type": "object",
+            "properties": {"cycle_id": {"type": "string"}},
+            "required": ["cycle_id"],
+        },
+    },
+    {
+        "command": "implementation_specs.generate",
+        "target_type": "delivery_cycle",
+        "required_roles": [ActorRole.OPERATOR.value],
+        "payload_schema": {
+            "type": "object",
+            "properties": {
+                "cycle_id": {"type": "string"},
+                "feature_spec_id": {"type": "string"},
+            },
+            "required": ["cycle_id"],
+        },
+    },
+    {
+        "command": "task_plan.generate",
+        "target_type": "delivery_cycle",
+        "required_roles": [ActorRole.OPERATOR.value],
+        "payload_schema": {
+            "type": "object",
+            "properties": {"cycle_id": {"type": "string"}},
+            "required": ["cycle_id"],
+        },
+    },
+    {
+        "command": "change_interpretation.rerun",
+        "target_type": "delivery_cycle",
+        "required_roles": [ActorRole.OPERATOR.value],
+        "payload_schema": {
+            "type": "object",
+            "properties": {"cycle_id": {"type": "string"}},
+            "required": ["cycle_id"],
+        },
+    },
+    {
+        "command": "architecture_delta.propose",
+        "target_type": "delivery_cycle",
+        "required_roles": [ActorRole.OPERATOR.value],
+        "payload_schema": {
+            "type": "object",
+            "properties": {"cycle_id": {"type": "string"}},
+            "required": ["cycle_id"],
+        },
+    },
+    {
+        "command": "release.create",
+        "target_type": "delivery_cycle",
+        "required_roles": [ActorRole.OPERATOR.value],
+        "payload_schema": {
+            "type": "object",
+            "properties": {"cycle_id": {"type": "string"}},
+            "required": ["cycle_id"],
+        },
+    },
 ]
 
 

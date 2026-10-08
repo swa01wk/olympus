@@ -6,6 +6,14 @@ from core.commands.bus import CommandBus
 from core.commands.change_handlers import handle_intake_change_request
 from core.commands.ci_handlers import handle_ingest_external_ci_result
 from core.commands.defect_handlers import handle_intake_defect
+from core.commands.generation_handlers import (
+    handle_architecture_delta_propose,
+    handle_architecture_propose,
+    handle_change_interpretation_rerun,
+    handle_implementation_specs_generate,
+    handle_release_create,
+    handle_task_plan_generate,
+)
 from core.commands.handlers import (
     handle_approval_decide,
     handle_create_contract_draft,
@@ -57,4 +65,10 @@ def build_command_bus() -> CommandBus:
     bus.register("record_repository_event", handle_record_repository_event)
     bus.register("attach_remote", handle_attach_remote)
     bus.register("ingest_external_ci_result", handle_ingest_external_ci_result)
+    bus.register("architecture.propose", handle_architecture_propose)
+    bus.register("implementation_specs.generate", handle_implementation_specs_generate)
+    bus.register("task_plan.generate", handle_task_plan_generate)
+    bus.register("change_interpretation.rerun", handle_change_interpretation_rerun)
+    bus.register("architecture_delta.propose", handle_architecture_delta_propose)
+    bus.register("release.create", handle_release_create)
     return bus

@@ -230,6 +230,13 @@ class ProductModelService:
             project_id=project_id,
             delivery_cycle_id=delivery_cycle_id,
         )
+        if execution_id is not None:
+            from core.domain.executions.models import Execution
+            from core.review.completion import complete_revision_if_needed
+
+            execution = await session.get(Execution, execution_id)
+            if execution is not None:
+                await complete_revision_if_needed(session, execution, decomp.id, ctx)
         return decomp
 
     async def _supersede_unapproved(

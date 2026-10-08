@@ -128,13 +128,16 @@ class PlanningCompletionService:
             if cycle is None:
                 return
             proposal = _sanitize_architecture_proposal(ArchitectureProposal.model_validate(output))
-            await ArchitectureService().persist_proposal(
+            arch_row = await ArchitectureService().persist_proposal(
                 session,
                 project_id=cycle.project_id,
                 proposal=proposal,
                 execution_id=execution.id,
                 ctx=ctx,
             )
+            from core.review.completion import complete_revision_if_needed
+
+            await complete_revision_if_needed(session, execution, arch_row.id, ctx)
         elif contract_profile == "kira.implementation_spec" and task.governing_ref_id:
             from core.domain.delivery_cycles.models import DeliveryCycle
             from core.domain.enums import DeliveryCycleType, SpecStatus
@@ -150,13 +153,16 @@ class PlanningCompletionService:
             impl_mode = await _implementation_spec_mode_for_execution(session, execution)
             if impl_mode == "REPAIR" and spec is not None:
                 draft = await _sanitize_implementation_spec_draft(session, spec.project_id, draft)
-                await ImplementationSpecService().persist_repair_draft(
+                repair_row = await ImplementationSpecService().persist_repair_draft(
                     session,
                     feature_spec_id=task.governing_ref_id,
                     draft=draft,
                     execution_id=execution.id,
                     ctx=ctx,
                 )
+                from core.review.completion import complete_revision_if_needed
+
+                await complete_revision_if_needed(session, execution, repair_row.id, ctx)
                 return
             is_delta = impl_mode == "DELTA" or (
                 impl_mode != "FULL"
@@ -196,14 +202,20 @@ class PlanningCompletionService:
                     )
                     row.status = SpecStatus.PROPOSED
                     await session.flush()
+                    from core.review.completion import complete_revision_if_needed
+
+                    await complete_revision_if_needed(session, execution, row.id, ctx)
                     return
-            await ImplementationSpecService().persist_draft(
+            impl_row = await ImplementationSpecService().persist_draft(
                 session,
                 feature_spec_id=task.governing_ref_id,
                 draft=draft,
                 execution_id=execution.id,
                 ctx=ctx,
             )
+            from core.review.completion import complete_revision_if_needed
+
+            await complete_revision_if_needed(session, execution, impl_row.id, ctx)
         elif contract_profile == "kira.task_plan":
             from core.domain.delivery_cycles.models import DeliveryCycle
             from core.domain.enums import DeliveryCycleType, SpecStatus

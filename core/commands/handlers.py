@@ -194,7 +194,11 @@ async def handle_approval_decide(
         payload.get("note"),
         ctx,
     )
-    if approval.approval_type == ApprovalType.SCOPE and approval.subject_type == "scope_set":
+    if approval.status == ApprovalStatus.CHANGES_REQUESTED:
+        from core.review.service import RevisionService
+
+        await RevisionService().request_revision(session, approval, ctx)
+    elif approval.approval_type == ApprovalType.SCOPE and approval.subject_type == "scope_set":
         from core.product_model.specifications.scope import ScopeService
 
         scope_svc = ScopeService()

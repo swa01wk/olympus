@@ -28,13 +28,16 @@ class FeatureChangeCompletionService:
             return
         if profile == "kira.change_interpret":
             interpretation = ChangeInterpretation.model_validate(output)
-            await ChangeRequestService().persist_interpretation(
+            cr = await ChangeRequestService().persist_interpretation(
                 session,
                 cycle.id,
                 interpretation,
                 execution.id,
                 ctx,
             )
+            from core.review.completion import complete_revision_if_needed
+
+            await complete_revision_if_needed(session, execution, cr.id, ctx)
         elif profile == "atlas.architecture_delta":
             from core.domain.events.append import append_domain_event
 

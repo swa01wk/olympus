@@ -123,6 +123,31 @@ export async function retryMaterialization(repositoryId: string, idempotencyKey?
   });
 }
 
+export type PromotionDecisionBody = {
+  subject_type: string;
+  subject_id: string;
+  decision: string;
+  note?: string | null;
+};
+
+export async function recordPromotionDecision(
+  cycleId: string,
+  body: PromotionDecisionBody,
+  idempotencyKey?: string,
+) {
+  return apiRequest<{
+    id: string;
+    subject_type: string;
+    subject_id: string;
+    decision: string;
+    note: string | null;
+  }>(`/delivery-cycles/${cycleId}/promotion-decisions`, {
+    method: "POST",
+    body,
+    idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
 /** @deprecated Use `createDeliveryCycle` */
 export async function createDeliveryCycleCommand(
   projectId: string,

@@ -19,6 +19,7 @@ import {
   requestArchitectureApproval,
   requestImplementationSpecApproval,
   requestScopeApproval,
+  recordPromotionDecision,
   retryMaterialization,
   uploadProductSource,
 } from "@/src/api/commands";
@@ -200,6 +201,34 @@ describe("C1 studio reads", () => {
     const fetchMock = mockFetchJson('{"id":"s1","turns":[]}');
     await fetchOrchestratorSession("sess-1");
     expect(firstCall(fetchMock)[0]).toContain("/orchestrator/sessions/sess-1");
+  });
+});
+
+describe("RL1.3 promotion decision client", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("recordPromotionDecision", async () => {
+    const fetchMock = mockFetchJson("{}");
+    await recordPromotionDecision(
+      "cycle-bf",
+      {
+        subject_type: "FEATURE_SPEC",
+        subject_id: "spec-1",
+        decision: "DEFER",
+        note: "Need more evidence",
+      },
+      "idem-promo",
+    );
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/delivery-cycles/cycle-bf/promotion-decisions");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      subject_type: "FEATURE_SPEC",
+      subject_id: "spec-1",
+      decision: "DEFER",
+      note: "Need more evidence",
+    });
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-promo");
   });
 });
 

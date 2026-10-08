@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.commands.context import CommandContext
-from core.domain.approvals.service import ApprovalService
 from core.domain.canonical_json import sha256_hex
 from core.domain.enums import ApprovalType, SpecStatus
 from core.domain.events.append import append_domain_event
@@ -15,8 +14,8 @@ from core.planning.architecture.service import ArchitectureService
 from core.planning.implementation_specs.conformance import ArchitectureConformanceValidator
 from core.planning.models import ImplementationSpec
 from core.planning.schemas import ImplementationSpecBody, ImplementationSpecDraft
-from core.policy.policy_service import ensure_policy_version
 from core.product_model.models import Feature, FeatureSpec
+from core.review.auto_request import ensure_pending_approval
 
 
 class ImplementationSpecService:
@@ -32,6 +31,7 @@ class ImplementationSpecService:
         draft: ImplementationSpecDraft,
         execution_id: uuid.UUID | None,
         ctx: CommandContext,
+        delivery_cycle_id: uuid.UUID | None = None,
     ) -> ImplementationSpec:
         from core.product_model.defects.repair import RepairSpecValidator
 
@@ -50,6 +50,7 @@ class ImplementationSpecService:
             ctx=ctx,
             for_delta=False,
             kind_override="REPAIR",
+            delivery_cycle_id=delivery_cycle_id,
         )
         return row
 
@@ -63,6 +64,7 @@ class ImplementationSpecService:
         ctx: CommandContext,
         for_delta: bool = False,
         kind_override: str | None = None,
+        delivery_cycle_id: uuid.UUID | None = None,
     ) -> ImplementationSpec:
         spec = await session.get(FeatureSpec, feature_spec_id)
         if spec is None:
@@ -145,6 +147,18 @@ class ImplementationSpecService:
             correlation_id=ctx.correlation_id,
             project_id=spec.project_id,
         )
+        if delivery_cycle_id is not None and not for_delta:
+            await ensure_pending_approval(
+                session,
+                project_id=spec.project_id,
+                approval_type=ApprovalType.IMPLEMENTATION_SPEC,
+                subject_type="implementation_spec",
+                subject_id=row.id,
+                subject_version=row.version,
+                subject_hash=row.content_hash,
+                delivery_cycle_id=delivery_cycle_id,
+                ctx=ctx,
+            )
         return row
 
     async def request_approval(
@@ -159,18 +173,16 @@ class ImplementationSpecService:
             raise DomainError(code="NOT_FOUND", message="ImplementationSpec not found")
         if row.status != SpecStatus.PROPOSED:
             raise DomainError(code="INVALID_STATE", message="ImplementationSpec must be PROPOSED")
-        policy = await ensure_policy_version(session)
-        approval = await ApprovalService(policy=policy).request(
+        approval = await ensure_pending_approval(
             session,
-            row.project_id,
-            delivery_cycle_id,
-            ApprovalType.IMPLEMENTATION_SPEC,
+            project_id=row.project_id,
+            approval_type=ApprovalType.IMPLEMENTATION_SPEC,
             subject_type="implementation_spec",
             subject_id=row.id,
             subject_version=row.version,
             subject_hash=row.content_hash,
+            delivery_cycle_id=delivery_cycle_id,
             ctx=ctx,
-            policy=policy,
         )
         return approval.id
 

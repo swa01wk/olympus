@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.commands.context import CommandContext
-from core.domain.approvals.service import ApprovalService
 from core.domain.canonical_json import sha256_hex
 from core.domain.enums import ApprovalType, SpecStatus
 from core.domain.events.append import append_domain_event
@@ -14,7 +13,7 @@ from core.domain.exceptions import DomainError
 from core.planning.architecture.validation import validate_architecture_proposal
 from core.planning.models import Architecture, ArchitectureContract
 from core.planning.schemas import ArchitectureBody, ArchitectureProposal
-from core.policy.policy_service import ensure_policy_version
+from core.review.auto_request import ensure_pending_approval
 
 
 class ArchitectureService:
@@ -26,6 +25,7 @@ class ArchitectureService:
         proposal: ArchitectureProposal,
         execution_id: uuid.UUID | None,
         ctx: CommandContext,
+        delivery_cycle_id: uuid.UUID | None = None,
     ) -> Architecture:
         errors = validate_architecture_proposal(proposal)
         if errors:
@@ -89,6 +89,18 @@ class ArchitectureService:
             correlation_id=ctx.correlation_id,
             project_id=project_id,
         )
+        if delivery_cycle_id is not None:
+            await ensure_pending_approval(
+                session,
+                project_id=project_id,
+                approval_type=ApprovalType.ARCHITECTURE,
+                subject_type="architecture",
+                subject_id=row.id,
+                subject_version=row.version,
+                subject_hash=row.content_hash,
+                delivery_cycle_id=delivery_cycle_id,
+                ctx=ctx,
+            )
         return row
 
     async def get_approved(
@@ -127,18 +139,16 @@ class ArchitectureService:
             raise DomainError(code="NOT_FOUND", message="Architecture not found")
         if arch.status != SpecStatus.PROPOSED:
             raise DomainError(code="INVALID_STATE", message="Architecture must be PROPOSED")
-        policy = await ensure_policy_version(session)
-        approval = await ApprovalService(policy=policy).request(
+        approval = await ensure_pending_approval(
             session,
-            arch.project_id,
-            delivery_cycle_id,
-            ApprovalType.ARCHITECTURE,
+            project_id=arch.project_id,
+            approval_type=ApprovalType.ARCHITECTURE,
             subject_type="architecture",
             subject_id=arch.id,
             subject_version=arch.version,
             subject_hash=arch.content_hash,
+            delivery_cycle_id=delivery_cycle_id,
             ctx=ctx,
-            policy=policy,
         )
         return approval.id
 

@@ -134,6 +134,7 @@ class PlanningCompletionService:
                 proposal=proposal,
                 execution_id=execution.id,
                 ctx=ctx,
+                delivery_cycle_id=cycle.id,
             )
             from core.review.completion import complete_revision_if_needed
 
@@ -159,6 +160,7 @@ class PlanningCompletionService:
                     draft=draft,
                     execution_id=execution.id,
                     ctx=ctx,
+                    delivery_cycle_id=cycle.id if cycle is not None else None,
                 )
                 from core.review.completion import complete_revision_if_needed
 
@@ -212,6 +214,7 @@ class PlanningCompletionService:
                 draft=draft,
                 execution_id=execution.id,
                 ctx=ctx,
+                delivery_cycle_id=cycle.id if cycle is not None else None,
             )
             from core.review.completion import complete_revision_if_needed
 

@@ -414,6 +414,24 @@ export function fetchApproval(approvalId: string) {
   }>(`/approvals/${approvalId}`);
 }
 
+export function listApprovals(params?: { status?: string }) {
+  const q = params?.status ? `?status=${encodeURIComponent(params.status)}` : "";
+  return apiRequest<
+    {
+      id: string;
+      key: string;
+      approval_type: string;
+      subject_type: string;
+      subject_id: string;
+      subject_version: number;
+      subject_hash: string;
+      status: string;
+      project_id: string;
+      delivery_cycle_id: string | null;
+    }[]
+  >(`/approvals${q}`);
+}
+
 export function fetchClarification(clarificationId: string) {
   return apiRequest<{
     id: string;

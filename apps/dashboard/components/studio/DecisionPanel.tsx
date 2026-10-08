@@ -5,6 +5,7 @@ import {
   findPendingApprovalForStage,
   guardResultsForApprovalType,
 } from "@/lib/studio-spine";
+import { REQUEST_CHANGES_INTERIM_HELPER } from "@/lib/changes-requested-audit";
 import {
   previewApprovalDecision,
   previewReleaseApprove,
@@ -246,6 +247,7 @@ export function DecisionPanel({
           Approve
         </Button>
       </div>
+      <p className="ol-body-sm ol-muted">{REQUEST_CHANGES_INTERIM_HELPER}</p>
       {error && (
         <p className="ol-body-sm ol-chat-err" role="alert">
           {error}

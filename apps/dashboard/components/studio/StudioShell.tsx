@@ -1,6 +1,7 @@
 "use client";
 
 import { ChatPanel } from "@/components/studio/chat/ChatPanel";
+import { ChangesRequestedFeedback } from "@/components/studio/ChangesRequestedFeedback";
 import { DecisionPanel } from "@/components/studio/DecisionPanel";
 import { NextStepBar } from "@/components/studio/NextStepBar";
 import { StageWorkspace } from "@/components/studio/workspace/StageWorkspace";
@@ -118,6 +119,11 @@ export function StudioShell({
         projectId={project?.id ?? cycle.project_id}
         nextTransitions={nextTransitions}
         onDecided={onStudioInvalidate}
+      />
+      <ChangesRequestedFeedback
+        cycleId={cycleId}
+        cycleType={cycle.type}
+        stage={selectedStage}
       />
       <StageWorkspace
         projectId={project?.id ?? cycle.project_id}

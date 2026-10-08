@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   approvalStage,
+  findChangesRequestedApprovalForStage,
   findPendingApprovalForStage,
   inboxStagesForCycle,
   isCycleStageBlocked,
@@ -168,6 +169,27 @@ describe("inboxStagesForCycle", () => {
     );
     expect(stages.has("ROOT_CAUSE")).toBe(true);
     expect(stages.has("PLANNING")).toBe(false);
+  });
+});
+
+describe("findChangesRequestedApprovalForStage", () => {
+  it("matches CHANGES_REQUESTED approval on stage", () => {
+    const hit = findChangesRequestedApprovalForStage(
+      [
+        {
+          id: "apr-cr",
+          approval_type: "SCOPE",
+          status: "CHANGES_REQUESTED",
+          delivery_cycle_id: "cyc-1",
+          subject_type: "ScopeBundle",
+          subject_id: "s1",
+        },
+      ],
+      "PRODUCT_MODEL",
+      "GREENFIELD_BUILD",
+      "cyc-1",
+    );
+    expect(hit?.id).toBe("apr-cr");
   });
 });
 

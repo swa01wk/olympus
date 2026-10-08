@@ -13,6 +13,7 @@ export function invalidateCycleQueries(
   void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.byCycle(cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.integration.candidates(cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.inboxRoot });
+  void queryClient.invalidateQueries({ queryKey: ["approvals"] });
   for (const tid of taskIds) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.executions.byTask(tid) });
   }

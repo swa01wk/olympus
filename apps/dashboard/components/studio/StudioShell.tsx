@@ -2,6 +2,7 @@
 
 import { ChatPanel } from "@/components/studio/chat/ChatPanel";
 import { ChangesRequestedFeedback } from "@/components/studio/ChangesRequestedFeedback";
+import { ProductSpecView } from "@/components/studio/ProductSpecView";
 import { RevisionActivityPanel } from "@/components/studio/RevisionActivityPanel";
 import { DecisionPanel } from "@/components/studio/DecisionPanel";
 import { NextStepBar } from "@/components/studio/NextStepBar";
@@ -58,6 +59,8 @@ export function StudioShell({
 }) {
   const compact = useMediaQuery("(max-width: 1023px)");
   const [tab, setTab] = useState<StudioTab>("workspace");
+  const [productSpecOpen, setProductSpecOpen] = useState(false);
+  const projectIdForSpec = project?.id ?? cycle.project_id;
 
   const control = (
     <StudioControlPanel
@@ -73,6 +76,7 @@ export function StudioShell({
       inboxStages={inboxStages}
       nextTransitions={nextTransitions}
       onSelectStage={onSelectStage}
+      onOpenProductSpec={() => setProductSpecOpen(true)}
     />
   );
 
@@ -127,6 +131,14 @@ export function StudioShell({
         stage={selectedStage}
       />
       <RevisionActivityPanel />
+      {productSpecOpen && (
+        <div className="ol-product-spec-overlay">
+          <ProductSpecView projectId={projectIdForSpec} />
+          <Button variant="quiet" type="button" onClick={() => setProductSpecOpen(false)}>
+            Close product spec
+          </Button>
+        </div>
+      )}
       <StageWorkspace
         projectId={project?.id ?? cycle.project_id}
         cycle={cycle}

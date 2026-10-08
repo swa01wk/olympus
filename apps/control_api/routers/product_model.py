@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import uuid
 
+from core.domain.enums import ModelOrigin
 from core.product_model.models import Capability, Feature, KnowledgeItem, ProductDecomposition
+from core.product_model.spec_view import ProductSpecViewService
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
@@ -30,6 +32,9 @@ class FeatureResponse(BaseModel):
     name: str
     status: str
     capability_id: uuid.UUID | None
+    description: str
+    origin: ModelOrigin
+    source_refs: list[dict[str, object]]
 
 
 @router.get("/projects/{project_id}/capabilities", response_model=list[CapabilityResponse])
@@ -57,6 +62,9 @@ async def list_features(
             name=f.name,
             status=f.status.value,
             capability_id=f.capability_id,
+            description=f.description,
+            origin=f.origin,
+            source_refs=list(f.source_refs or []),
         )
         for f in rows.scalars()
     ]
@@ -76,7 +84,18 @@ async def get_feature(
         name=row.name,
         status=row.status.value,
         capability_id=row.capability_id,
+        description=row.description,
+        origin=row.origin,
+        source_refs=list(row.source_refs or []),
     )
+
+
+@router.get("/projects/{project_id}/product-spec")
+async def get_product_spec(
+    project_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    return await ProductSpecViewService().build(session, project_id)
 
 
 @router.get("/delivery-cycles/{cycle_id}/decompositions")

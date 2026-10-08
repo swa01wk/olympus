@@ -19,6 +19,7 @@ import {
   useAllFeatureSpecSummaries,
   useFeatures,
 } from "@/src/api/hooks/use-studio-queries";
+import { ProductSpecView } from "@/components/studio/ProductSpecView";
 import { useRegisterStudioFocus } from "@/lib/studio-focus";
 import { requestScopeApproval } from "@/src/api/commands";
 import { useMemo, useState } from "react";
@@ -139,8 +140,15 @@ export function ProductModelStage({
     return ids;
   }, [allSpecQueries]);
 
+  const scopeApproved = useMemo(
+    () =>
+      allSpecQueries.some((q) => (q.data ?? []).some((s) => s.status === "APPROVED")),
+    [allSpecQueries],
+  );
+
   return (
     <StageWorkspaceFrame>
+      {scopeApproved && <ProductSpecView projectId={projectId} />}
       <div className="ol-ws-split">
         <Panel title="Capabilities & features" sub="Product model tree">
           {features.isLoading && <p className="ol-body-sm ol-muted">Loading…</p>}

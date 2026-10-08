@@ -1,11 +1,13 @@
 "use client";
 
 import { EmptyState, Panel } from "@/components/primitives";
+import { ProductSpecView } from "@/components/studio/ProductSpecView";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
 
-export function BrownfieldReadyStage() {
+export function BrownfieldReadyStage({ projectId }: { projectId: string }) {
   return (
     <StageWorkspaceFrame>
+      <ProductSpecView projectId={projectId} />
       <Panel title="Ready for change" sub="Brownfield onboarding complete">
         <EmptyState
           title="READY"

@@ -351,6 +351,12 @@ export function getSourceContent(projectId: string, sourceId: string) {
   return apiRequest<ProductSourceContent>(`/projects/${projectId}/sources/${sourceId}/content`);
 }
 
+export function getProductSpec(projectId: string) {
+  return apiRequest<import("@/src/api/types/product-spec").ProductSpecDocument>(
+    `/projects/${projectId}/product-spec`,
+  );
+}
+
 export function listCapabilities(projectId: string) {
   return apiRequest<Capability[]>(`/projects/${projectId}/capabilities`);
 }

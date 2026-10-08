@@ -43,6 +43,9 @@ export type Feature = {
   name: string;
   status: string;
   capability_id: string | null;
+  description: string;
+  origin: string;
+  source_refs: Record<string, unknown>[];
 };
 
 export type FeatureSpecSummary = {

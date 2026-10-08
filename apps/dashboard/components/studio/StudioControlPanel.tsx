@@ -5,6 +5,7 @@ import { StreamStatus } from "@/components/shell/StreamStatus";
 import type { CycleStreamSnapshot } from "@/src/api/sse/use-cycle-event-stream";
 import type { DeliveryCycle, Project, TransitionPreview } from "@/src/api/types/core";
 import type { DeliveryCycleType } from "@/src/control-plane/stage-lanes";
+import { Button } from "@/components/primitives";
 import { useRouter } from "next/navigation";
 
 export function StudioControlPanel({
@@ -20,6 +21,7 @@ export function StudioControlPanel({
   inboxStages,
   nextTransitions,
   onSelectStage,
+  onOpenProductSpec,
 }: {
   projects: Project[];
   project?: Project;
@@ -33,6 +35,7 @@ export function StudioControlPanel({
   inboxStages: Set<string>;
   nextTransitions: TransitionPreview[];
   onSelectStage: (stage: string) => void;
+  onOpenProductSpec?: () => void;
 }) {
   const router = useRouter();
 
@@ -74,6 +77,11 @@ export function StudioControlPanel({
           Inbox ({inboxCount})
         </span>
       </div>
+      {onOpenProductSpec && (
+        <Button variant="quiet" type="button" onClick={onOpenProductSpec}>
+          Product spec
+        </Button>
+      )}
       <StageSpine
         cycleType={cycle.type as DeliveryCycleType}
         cycleState={cycle.state}

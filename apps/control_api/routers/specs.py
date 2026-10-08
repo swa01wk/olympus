@@ -81,6 +81,12 @@ async def get_spec(
         "version": spec.version,
         "status": spec.status.value,
         "spec_kind": spec.spec_kind.value,
+        "promoted_from_id": str(spec.promoted_from_id) if spec.promoted_from_id else None,
+        "derived_from_source_version_id": (
+            str(spec.derived_from_source_version_id)
+            if spec.derived_from_source_version_id
+            else None
+        ),
         "body": spec.body,
         "requirements": [
             {"id": str(r.id), "lineage_key": r.lineage_key, "statement": r.statement} for r in reqs
@@ -94,6 +100,9 @@ async def get_spec(
                 "id": str(a.id),
                 "lineage_key": a.lineage_key,
                 "statement": a.statement,
+                "given": a.given,
+                "when": a.when,
+                "then": a.then,
                 "mandatory": a.mandatory,
                 "evidence_requirement": a.evidence_requirement.value,
             }

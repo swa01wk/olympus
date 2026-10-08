@@ -130,13 +130,13 @@ export function StageWorkspace({
         case "RECOVERED_SPEC":
           return <BrownfieldRecoveredSpecStage cycleId={cycleId} />;
         case "BASELINE":
-          return <BrownfieldBaselineStage cycleId={cycleId} />;
+          return <BrownfieldBaselineStage projectId={projectId} cycleId={cycleId} />;
         case "READINESS":
           return <BrownfieldReadinessStage cycleId={cycleId} />;
         case "REMEDIATION":
           return <BrownfieldRemediationStage projectId={projectId} cycleId={cycleId} />;
         case "READY":
-          return <BrownfieldReadyStage />;
+          return <BrownfieldReadyStage projectId={projectId} />;
         default:
           break;
       }

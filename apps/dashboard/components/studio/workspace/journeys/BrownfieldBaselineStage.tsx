@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, EmptyState, Label, Panel, StatusBadge } from "@/components/primitives";
+import { ProductSpecView } from "@/components/studio/ProductSpecView";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
 import { previewStudioPost } from "@/lib/command-preview";
 import {
@@ -173,7 +174,13 @@ function ReviewQueueDecisionControls({
   );
 }
 
-export function BrownfieldBaselineStage({ cycleId }: { cycleId: string }) {
+export function BrownfieldBaselineStage({
+  projectId,
+  cycleId,
+}: {
+  projectId: string;
+  cycleId: string;
+}) {
   const queue = useReviewQueue(cycleId);
   const cycle = useDeliveryCycle(cycleId);
   const actor = useActorMe();
@@ -188,6 +195,7 @@ export function BrownfieldBaselineStage({ cycleId }: { cycleId: string }) {
 
   return (
     <StageWorkspaceFrame>
+      <ProductSpecView projectId={projectId} />
       <Panel title="Review queue" sub={`GET /delivery-cycles/${cycleId}/review-queue`}>
         <div className="ol-seg" role="radiogroup" aria-label="Queue filter">
           <button

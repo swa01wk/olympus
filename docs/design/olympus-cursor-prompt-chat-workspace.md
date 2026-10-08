@@ -215,7 +215,7 @@ Acceptance: deliberately renaming one path in the manifest fails the test with t
 2. `start_code_index` → wait for the index → `start_spec_recovery` → wait for the recovery proposal → `start_baseline`.
 3. Work the review queue in the workspace. Record promotion decisions per `brownfield_review.yaml`; the approver decides any PROMOTION approvals. Then `start_readiness`.
 4. If readiness fails as remediable: `start_remediation`, let it complete, `reassess_readiness`. Repeat until it passes or the stage timeout is reached.
-5. `declare_ready` (approver decides a READINESS approval if one is requested).
+5. `declare_ready` (no approval is requested).
 6. Assert: cycle `READY`; project `readiness_state` `READY_FOR_CHANGE`.
 
 `tests/e2e/studio/03-feature-change.spec.ts` — DC-003 → R2
@@ -228,8 +228,8 @@ Acceptance: deliberately renaming one path in the manifest fails the test with t
 `tests/e2e/studio/04-bug-fix.spec.ts` — DC-004 → R3
 1. Studio intake → *Defect* with the title and description of `defect_closed_update.md` (`POST /projects/{p}/defects`). Open the cycle it returns (it starts at TRIAGE).
 2. Wait for triage → `start_reproduction`. If the reproduction is not recorded within the timeout, use *Proceed unreproduced* with a reason; the approver decides the UNREPRODUCED_REPAIR approval.
-3. `resolve_expected_behavior` → approver decides the EXPECTED_BEHAVIOR approval → `start_root_cause`.
-4. Wait for root cause and the repair spec → approver approves REPAIR_SPEC → accept the task plan → `start_development`.
+3. `resolve_expected_behavior` → (EXPECTED_BEHAVIOR approval from RL3 onward) → `start_root_cause`.
+4. Wait for root cause and the repair spec → approver approves the repair **IMPLEMENTATION_SPEC** → accept the task plan → `start_development`.
 5. Development → `start_integration` → `start_regression` → wait for reproduction and regression to pass → `start_assurance` → release as in Greenfield steps 8–9 → `R3`.
 6. Assert: cycle `COMPLETE`; `R3` `RELEASED`.
 

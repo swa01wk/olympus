@@ -322,6 +322,33 @@ export async function proposeArchitectureDelta(cycleId: string, idempotencyKey?:
   );
 }
 
+export async function proceedUnreproduced(
+  defectId: string,
+  reason: string,
+  idempotencyKey?: string,
+) {
+  return apiRequest<{ approval_id: string; status: string }>(
+    `/defects/${defectId}/proceed-unreproduced`,
+    {
+      method: "POST",
+      body: { reason },
+      idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+    },
+  );
+}
+
+export async function rejectDefect(
+  defectId: string,
+  reason?: string | null,
+  idempotencyKey?: string,
+) {
+  return apiRequest<{ id: string; status: string }>(`/defects/${defectId}/reject`, {
+    method: "POST",
+    body: { reason: reason ?? null },
+    idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
 export async function declineArchitectureDelta(
   cycleId: string,
   note: string,

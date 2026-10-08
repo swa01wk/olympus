@@ -84,6 +84,7 @@ vi.mock("@/src/api/hooks/use-drill-queries", () => ({
 }));
 
 vi.mock("@/src/api/hooks/use-olympus-queries", () => ({
+  useActorMe: () => ({ data: { roles: ["OPERATOR", "APPROVER"] } }),
   useProjectOverview: () => ({ data: null }),
   useDeliveryCycle: () => ({ data: null }),
   useIntegrationCandidates: () => ({ data: [] }),

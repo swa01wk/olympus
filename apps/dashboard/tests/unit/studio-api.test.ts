@@ -15,6 +15,8 @@ import {
   proposeArchitecture,
   proposeArchitectureDelta,
   declineArchitectureDelta,
+  proceedUnreproduced,
+  rejectDefect,
   putSecret,
   registerRepository,
   requestApproval,
@@ -206,6 +208,28 @@ describe("C1 studio reads", () => {
     const fetchMock = mockFetchJson('{"id":"s1","turns":[]}');
     await fetchOrchestratorSession("sess-1");
     expect(firstCall(fetchMock)[0]).toContain("/orchestrator/sessions/sess-1");
+  });
+});
+
+describe("RL1.6 defect actions client", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("proceedUnreproduced", async () => {
+    const fetchMock = mockFetchJson('{"approval_id":"apr-u","status":"APPROVED"}');
+    await proceedUnreproduced("def-1", "Staging only", "idem-u");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/defects/def-1/proceed-unreproduced");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "Staging only" });
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-u");
+  });
+
+  it("rejectDefect", async () => {
+    const fetchMock = mockFetchJson('{"id":"def-1","status":"REJECTED"}');
+    await rejectDefect("def-1", "Duplicate report", "idem-rj");
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/defects/def-1/reject");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "Duplicate report" });
+    expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-rj");
   });
 });
 

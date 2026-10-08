@@ -27,6 +27,13 @@ class _KiraState(TypedDict, total=False):
     model_call_ids: list[str]
 
 
+def _revision_vars(snap: dict[str, Any]) -> dict[str, str]:
+    return {
+        "revision_feedback": str(snap.get("revision_feedback", "")),
+        "previous_output_json": str(snap.get("previous_output_json", "")),
+    }
+
+
 def _build_kira_graph(deps: GraphDeps) -> Any:
     from langgraph.graph import END, StateGraph
 
@@ -60,6 +67,7 @@ def _build_kira_graph(deps: GraphDeps) -> Any:
                     "source_text": chunk,
                     "decision_context": decision_context,
                     "approved_product_summary": approved_summary,
+                    **_revision_vars(deps.request.snapshot or {}),
                 },
             )
             result = await deps.model_router.invoke(
@@ -106,6 +114,7 @@ def _build_kira_planning_graph(
         values: dict[str, object] = {
             tpl: str(snap.get(snap_key, "")) for tpl, snap_key in template_keys.items()
         }
+        values.update(_revision_vars(snap))
         system = render_prompt(template, values)
         result = await deps.model_router.invoke(
             ModelRequest(

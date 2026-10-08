@@ -16,6 +16,13 @@ class _AtlasState(TypedDict, total=False):
     model_call_ids: list[str]
 
 
+def _revision_vars(snap: dict[str, Any]) -> dict[str, str]:
+    return {
+        "revision_feedback": str(snap.get("revision_feedback", "")),
+        "previous_output_json": str(snap.get("previous_output_json", "")),
+    }
+
+
 def _build_atlas_graph(deps: GraphDeps) -> Any:
     from langgraph.graph import END, StateGraph
 
@@ -29,6 +36,7 @@ def _build_atlas_graph(deps: GraphDeps) -> Any:
                 "approved_product_summary": str(snap.get("approved_product_summary", "")),
                 "feature_specs_json": json.dumps(snap.get("feature_specs") or [], indent=2),
                 "technology_constraints": str(snap.get("technology_constraints") or ""),
+                **_revision_vars(snap),
             },
         )
         result = await deps.model_router.invoke(
@@ -70,6 +78,7 @@ def _build_atlas_delta_graph(deps: GraphDeps) -> Any:
                 "project_name": str(snap.get("project_name", "project")),
                 "architecture_summary": str(snap.get("architecture_summary", "")),
                 "impact_summary": str(snap.get("impact_summary", "")),
+                **_revision_vars(snap),
             },
         )
         result = await deps.model_router.invoke(

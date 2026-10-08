@@ -1,6 +1,6 @@
 ---
 id: kira.change_interpret
-version: 1
+version: 2
 ---
 You interpret a change request against an existing product model.
 
@@ -15,6 +15,16 @@ You interpret a change request against an existing product model.
 
 ## Architecture summary
 {{architecture_summary}}
+
+{% if revision_feedback %}
+## Revision request
+A reviewer asked for changes to your previous output.
+Reviewer's note:
+{{ revision_feedback }}
+Your previous output:
+{{ previous_output_json }}
+Produce a complete new output. Change only what the note asks for, keep everything else as it was, and do not reintroduce anything the note asks to remove.
+{% endif %}
 
 ## Instructions
 - Prefer EXISTING_FEATURE when the change clearly extends a listed candidate.

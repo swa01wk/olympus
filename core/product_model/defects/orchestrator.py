@@ -16,6 +16,8 @@ from core.domain.task_contracts.models import TaskContract
 from core.domain.task_contracts.schemas import TaskContractBody, VersionedRef
 from core.domain.tasks.service import TaskService
 from core.product_model.defects.service import DefectService
+from core.review.context import RevisionContext
+from core.review.contract_snapshot import attach_snapshot
 
 
 class BugFixOrchestrator:
@@ -346,6 +348,8 @@ class BugFixOrchestrator:
         session: AsyncSession,
         cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         from core.domain.enums import SpecStatus
         from core.intelligence.impact.engine import ImpactEngine
@@ -433,25 +437,25 @@ class BugFixOrchestrator:
             model_alias="planning",
             required_outputs=["artifact:IMPLEMENTATION_SPEC_DRAFT"],
         )
+        repair_snapshot = {
+            "implementation_spec_mode": "REPAIR",
+            "project_name": str(cycle.objective),
+            "root_cause_summary": rca.explanation if rca else "",
+            "impact_assessment_json": json.dumps({"id": str(ia.id) if ia else None}, indent=2),
+            "expected_ac_keys": ",".join(defect.expected_ac_ids or []),
+            "reproduction_artifact_ref": str(pre.artifact_id) if pre else "",
+            "max_repair_files": str(policy.get("max_repair_files", 3)),
+        }
         contract = TaskContract(
             task_id=task.id,
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body={
-                **body.model_dump(mode="json"),
-                "_snapshot": {
-                    "implementation_spec_mode": "REPAIR",
-                    "project_name": str(cycle.objective),
-                    "root_cause_summary": rca.explanation if rca else "",
-                    "impact_assessment_json": json.dumps(
-                        {"id": str(ia.id) if ia else None}, indent=2
-                    ),
-                    "expected_ac_keys": ",".join(defect.expected_ac_ids or []),
-                    "reproduction_artifact_ref": str(pre.artifact_id) if pre else "",
-                    "max_repair_files": str(policy.get("max_repair_files", 3)),
-                },
-            },
+            body=attach_snapshot(
+                body.model_dump(mode="json"),
+                snapshot=repair_snapshot,
+                revision=revision,
+            ),
             content_hash=sha256_hex(f"repair-impl-spec-{cycle_id}"),
             compiled_by="bug_fix",
         )

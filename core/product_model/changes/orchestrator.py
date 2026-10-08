@@ -14,6 +14,8 @@ from core.domain.task_contracts.models import TaskContract
 from core.domain.task_contracts.schemas import TaskContractBody, VersionedRef
 from core.domain.tasks.service import TaskService
 from core.product_model.changes.service import ChangeRequestService
+from core.review.context import RevisionContext
+from core.review.contract_snapshot import attach_snapshot
 
 
 class FeatureChangeOrchestrator:
@@ -22,6 +24,8 @@ class FeatureChangeOrchestrator:
         session: AsyncSession,
         cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         context = await ChangeRequestService().build_interpretation_context(session, cycle_id)
         cycle = await session.get(DeliveryCycle, cycle_id)
@@ -50,10 +54,7 @@ class FeatureChangeOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body={
-                **body.model_dump(mode="json"),
-                "_snapshot": context,
-            },
+            body=attach_snapshot(body.model_dump(mode="json"), snapshot=context, revision=revision),
             content_hash=f"change-interpret-{cycle_id}",
             compiled_by="feature_change",
         )
@@ -68,6 +69,8 @@ class FeatureChangeOrchestrator:
         session: AsyncSession,
         cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         from core.intelligence.impact.engine import ImpactEngine
         from core.product_model.specifications.delta import SpecDeltaService
@@ -114,7 +117,11 @@ class FeatureChangeOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body={**body.model_dump(mode="json"), "_snapshot": snapshot},
+            body=attach_snapshot(
+                body.model_dump(mode="json"),
+                snapshot=snapshot,
+                revision=revision,
+            ),
             content_hash=f"impl-spec-delta-{cycle_id}",
             compiled_by="feature_change",
         )
@@ -131,6 +138,8 @@ class FeatureChangeOrchestrator:
         session: AsyncSession,
         cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         cycle = await session.get(DeliveryCycle, cycle_id)
         if cycle is None:
@@ -158,7 +167,7 @@ class FeatureChangeOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body=body.model_dump(mode="json"),
+            body=attach_snapshot(body.model_dump(mode="json"), revision=revision),
             content_hash=f"arch-delta-{cycle_id}",
             compiled_by="feature_change",
         )

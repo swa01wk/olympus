@@ -11,6 +11,8 @@ from core.domain.task_contracts.models import TaskContract
 from core.domain.task_contracts.schemas import TaskContractBody, VersionedRef
 from core.domain.tasks.service import TaskService
 from core.product_model.models import ProductSource
+from core.review.context import RevisionContext
+from core.review.contract_snapshot import attach_snapshot
 
 
 class DecompositionOrchestrator:
@@ -21,6 +23,7 @@ class DecompositionOrchestrator:
         source: ProductSource,
         delivery_cycle_id: uuid.UUID,
         ctx: CommandContext,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         task = await TaskService().create_task(
             session,
@@ -59,7 +62,7 @@ class DecompositionOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body=body.model_dump(mode="json"),
+            body=attach_snapshot(body.model_dump(mode="json"), revision=revision),
             content_hash=f"decompose-{source.id}",
             compiled_by="product_model",
         )

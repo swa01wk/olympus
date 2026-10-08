@@ -12,6 +12,8 @@ from core.domain.task_contracts.schemas import TaskContractBody, VersionedRef
 from core.domain.tasks.service import TaskService
 from core.planning.models import Architecture
 from core.product_model.models import FeatureSpec, ScopeSet, ScopeSetItem
+from core.review.context import RevisionContext
+from core.review.contract_snapshot import attach_snapshot
 
 
 class PlanningOrchestrator:
@@ -20,6 +22,8 @@ class PlanningOrchestrator:
         session: AsyncSession,
         delivery_cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         from core.domain.delivery_cycles.models import DeliveryCycle
 
@@ -50,7 +54,7 @@ class PlanningOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body=body.model_dump(mode="json"),
+            body=attach_snapshot(body.model_dump(mode="json"), revision=revision),
             content_hash=f"atlas-{delivery_cycle_id}",
             compiled_by="planning",
         )
@@ -65,6 +69,9 @@ class PlanningOrchestrator:
         session: AsyncSession,
         delivery_cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        feature_spec_id: uuid.UUID | None = None,
+        revision: RevisionContext | None = None,
     ) -> list[dict[str, str]]:
         from core.domain.delivery_cycles.models import DeliveryCycle
 
@@ -99,6 +106,8 @@ class PlanningOrchestrator:
             spec = await session.get(FeatureSpec, item.feature_spec_id)
             if spec is None or spec.status != SpecStatus.APPROVED:
                 continue
+            if feature_spec_id is not None and spec.id != feature_spec_id:
+                continue
             task = await TaskService().create_task(
                 session,
                 delivery_cycle_id,
@@ -130,7 +139,7 @@ class PlanningOrchestrator:
                 key="v1",
                 version=1,
                 status=TaskContractStatus.ISSUED,
-                body=body.model_dump(mode="json"),
+                body=attach_snapshot(body.model_dump(mode="json"), revision=revision),
                 content_hash=f"impl-spec-{spec.id}",
                 compiled_by="planning",
             )
@@ -146,6 +155,8 @@ class PlanningOrchestrator:
         session: AsyncSession,
         delivery_cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         task = await TaskService().create_task(
             session,
@@ -171,7 +182,7 @@ class PlanningOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body=body.model_dump(mode="json"),
+            body=attach_snapshot(body.model_dump(mode="json"), revision=revision),
             content_hash=f"task-plan-{delivery_cycle_id}",
             compiled_by="planning",
         )

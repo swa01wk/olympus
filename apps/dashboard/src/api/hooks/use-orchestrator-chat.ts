@@ -11,7 +11,7 @@ import {
 import { isApiError } from "@/src/api/client";
 import { createOrchestratorSession, postOrchestratorTurn } from "@/src/api/commands";
 import { fetchOrchestratorSession } from "@/src/api/resources";
-import type { OrchestratorTurn } from "@/src/api/types/orchestrator";
+import type { OrchestratorFocus, OrchestratorTurn } from "@/src/api/types/orchestrator";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ChatLine =
@@ -39,7 +39,11 @@ function systemNotesFromLines(prev: ChatLine[]): ChatLine[] {
   return prev.filter((l) => l.kind === "system-note");
 }
 
-export function useOrchestratorChat(projectId: string | undefined, cycleId: string | undefined) {
+export function useOrchestratorChat(
+  projectId: string | undefined,
+  cycleId: string | undefined,
+  focus?: OrchestratorFocus | null,
+) {
   const enabled = Boolean(projectId && cycleId);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lines, setLines] = useState<ChatLine[]>([]);
@@ -202,7 +206,7 @@ export function useOrchestratorChat(projectId: string | undefined, cycleId: stri
         const sessionBefore = await fetchOrchestratorSession(sid);
         turnCountAtSendRef.current = visibleSessionTurns(sessionBefore.turns).length;
 
-        const { execution_id: executionId } = await postOrchestratorTurn(sid, text);
+        const { execution_id: executionId } = await postOrchestratorTurn(sid, text, focus ?? null);
         pendingRef.current.add(executionId);
         setLines((prev) => [
           ...prev,
@@ -213,7 +217,7 @@ export function useOrchestratorChat(projectId: string | undefined, cycleId: stri
         setError(e instanceof Error ? e.message : "Send failed");
       }
     },
-    [enabled, ensureSession, sessionId, startPolling],
+    [enabled, ensureSession, focus, sessionId, startPolling],
   );
 
   const addSystemNote = useCallback((text: string) => {

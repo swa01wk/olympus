@@ -87,7 +87,7 @@ describe("DecisionPanel", () => {
     expect(screen.getByText(/Decision required/i)).toBeTruthy();
     expect(screen.getByText(/APPROVER role/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Approve" })).toHaveProperty("disabled", true);
-    expect(screen.getByText(/won't revise from it until revision support ships/i)).toBeTruthy();
+    expect(screen.getByText(/agent will revise using your note/i)).toBeTruthy();
   });
 
   it("hidden when no pending approval for stage", () => {

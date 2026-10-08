@@ -416,10 +416,14 @@ export async function createOrchestratorSession(body: {
   return apiRequest<OrchestratorSession>("/orchestrator/sessions", { method: "POST", body });
 }
 
-export async function postOrchestratorTurn(sessionId: string, message: string) {
+export async function postOrchestratorTurn(
+  sessionId: string,
+  message: string,
+  focus?: { subject_type: string; subject_id: string } | null,
+) {
   return apiRequest<{ execution_id: string }>(`/orchestrator/sessions/${sessionId}/turns`, {
     method: "POST",
-    body: { message },
+    body: focus ? { message, focus } : { message },
   });
 }
 

@@ -2,6 +2,7 @@
 
 import { ChatPanel } from "@/components/studio/chat/ChatPanel";
 import { ChangesRequestedFeedback } from "@/components/studio/ChangesRequestedFeedback";
+import { RevisionActivityPanel } from "@/components/studio/RevisionActivityPanel";
 import { DecisionPanel } from "@/components/studio/DecisionPanel";
 import { NextStepBar } from "@/components/studio/NextStepBar";
 import { StageWorkspace } from "@/components/studio/workspace/StageWorkspace";
@@ -125,6 +126,7 @@ export function StudioShell({
         cycleType={cycle.type}
         stage={selectedStage}
       />
+      <RevisionActivityPanel />
       <StageWorkspace
         projectId={project?.id ?? cycle.project_id}
         cycle={cycle}

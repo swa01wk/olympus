@@ -16,6 +16,7 @@ import {
   useSourceContent,
   useSources,
 } from "@/src/api/hooks/use-studio-queries";
+import { useRegisterStudioFocus } from "@/lib/studio-focus";
 import { decomposeSource } from "@/src/api/commands";
 import { useRef, useState } from "react";
 
@@ -46,6 +47,10 @@ export function DiscoveryStage({
     (d) => d.status === "PROPOSED" && d.execution_id,
   );
   const decomposeBusy = Boolean(activeDecomp);
+
+  useRegisterStudioFocus(
+    activeSourceId ? { subject_type: "product_source", subject_id: activeSourceId } : null,
+  );
 
   const confirmUpload = async () => {
     if (!pendingFile) return;

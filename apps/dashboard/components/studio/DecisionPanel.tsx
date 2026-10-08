@@ -5,7 +5,8 @@ import {
   findPendingApprovalForStage,
   guardResultsForApprovalType,
 } from "@/lib/studio-spine";
-import { REQUEST_CHANGES_INTERIM_HELPER } from "@/lib/changes-requested-audit";
+import { requestChangesHelperText } from "@/lib/request-changes-helper";
+import { useStudioDecisionNoteOptional } from "@/lib/studio-decision-note";
 import {
   previewApprovalDecision,
   previewReleaseApprove,
@@ -24,7 +25,7 @@ import { fetchAuditForTarget } from "@/src/api/resources";
 import type { InboxItem, TransitionPreview } from "@/src/api/types/core";
 import type { DeliveryCycleType } from "@/src/control-plane/stage-lanes";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function decisionErrorMessage(err: unknown): { message: string; stale?: boolean } {
   if (isApiError(err)) {
@@ -121,6 +122,8 @@ export function DecisionPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const decisionNote = useStudioDecisionNoteOptional();
 
   const approval = useApprovalDetail(pending?.id);
   const a = approval.data;
@@ -134,6 +137,16 @@ export function DecisionPanel({
     queryFn: () => fetchAuditForTarget("approval", pending!.id),
     enabled: Boolean(pending?.id),
   });
+
+  useEffect(() => {
+    decisionNote?.registerDecisionPanel(panelRef.current);
+  });
+
+  useEffect(() => {
+    if (!pending || !decisionNote) return;
+    const draft = decisionNote.consumePendingNote(pending.id);
+    if (draft) setNote(draft);
+  }, [decisionNote, pending?.id]);
 
   if (!pending) return null;
 
@@ -173,7 +186,12 @@ export function DecisionPanel({
   };
 
   return (
-    <Panel title="Decision required" sub={`${pending.approval_type} · ${pending.key}`} className="ol-decision-panel">
+    <div ref={panelRef}>
+    <Panel
+      title="Decision required"
+      sub={`${pending.approval_type} · ${pending.key}`}
+      className="ol-decision-panel"
+    >
       <div className="ol-appr-scope">
         <div>
           <Label>Approval type</Label>
@@ -247,7 +265,7 @@ export function DecisionPanel({
           Approve
         </Button>
       </div>
-      <p className="ol-body-sm ol-muted">{REQUEST_CHANGES_INTERIM_HELPER}</p>
+      <p className="ol-body-sm ol-muted">{requestChangesHelperText(pending.approval_type)}</p>
       {error && (
         <p className="ol-body-sm ol-chat-err" role="alert">
           {error}
@@ -269,5 +287,6 @@ export function DecisionPanel({
         </details>
       )}
     </Panel>
+    </div>
   );
 }

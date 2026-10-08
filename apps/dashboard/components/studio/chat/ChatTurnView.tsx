@@ -2,6 +2,7 @@
 
 import { ClarificationDraftCard } from "@/components/studio/chat/ClarificationDraftCard";
 import { ProposalCard } from "@/components/studio/chat/ProposalCard";
+import { RevisionNoteDraftCard } from "@/components/studio/chat/RevisionNoteDraftCard";
 import { splitExplainText } from "@/lib/record-stage-links";
 import { turnText } from "@/lib/chat-transcript";
 import type { ProposalRouteContext } from "@/src/api/proposal-routes";
@@ -41,7 +42,30 @@ export function ChatTurnView({
   }
 
   if (intent === "NAVIGATE") {
+    if (turn.navigate_to) {
+      return (
+        <div className="ol-chat-turn-block">
+          {text && <p className="ol-body">{text}</p>}
+          <button
+            type="button"
+            className="ol-ws-list-btn"
+            onClick={() => onSelectStage(turn.navigate_to!)}
+          >
+            Open {turn.navigate_to} stage
+          </button>
+        </div>
+      );
+    }
     return <p className="ol-body">{text}</p>;
+  }
+
+  if (intent === "REVISION_NOTE_DRAFT" && turn.revision_note_draft) {
+    return (
+      <div className="ol-chat-turn-block">
+        {text && <p className="ol-body">{text}</p>}
+        <RevisionNoteDraftCard draft={turn.revision_note_draft} />
+      </div>
+    );
   }
 
   if (intent === "PROPOSE_COMMAND" && turn.proposal && dismissedProposalKey !== proposalKey) {

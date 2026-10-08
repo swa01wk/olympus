@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatTurnView } from "@/components/studio/chat/ChatTurnView";
+import { StudioDecisionNoteProvider } from "@/lib/studio-decision-note";
 import { ProposalCard } from "@/components/studio/chat/ProposalCard";
 
 const ctx = { projectId: "p1", cycleId: "c1", cycleState: "DISCOVERY" };
@@ -38,18 +39,47 @@ describe("ChatTurnView intents", () => {
     expect(container.querySelector(".ol-muted")?.textContent).toContain("Outside scope");
   });
 
-  it("renders NAVIGATE as plain text", () => {
+  it("renders NAVIGATE with stage button when navigate_to set", () => {
+    const onSelectStage = vi.fn();
     render(
       <ChatTurnView
-        turn={{ role: "assistant", text: "Open planning view.", intent: "NAVIGATE" }}
+        turn={{
+          role: "assistant",
+          text: "Open planning view.",
+          intent: "NAVIGATE",
+          navigate_to: "PLANNING",
+        }}
         ctx={ctx}
         studioBasePath="/studio"
         clarifications={[]}
         onDismissProposal={() => {}}
-        onSelectStage={vi.fn()}
+        onSelectStage={onSelectStage}
       />,
     );
-    expect(screen.getByText("Open planning view.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /PLANNING stage/i }));
+    expect(onSelectStage).toHaveBeenCalledWith("PLANNING");
+  });
+
+  it("renders REVISION_NOTE_DRAFT card", () => {
+    render(
+      <StudioDecisionNoteProvider>
+        <ChatTurnView
+          turn={{
+            role: "assistant",
+            text: "Draft note for reviewer.",
+            intent: "REVISION_NOTE_DRAFT",
+            revision_note_draft: { approval_id: "apr-1", note: "Fix rule R-2" },
+          }}
+          ctx={ctx}
+          studioBasePath="/studio"
+          clarifications={[]}
+          onDismissProposal={() => {}}
+          onSelectStage={vi.fn()}
+        />
+      </StudioDecisionNoteProvider>,
+    );
+    expect(screen.getByText("Fix rule R-2")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Use in decision panel" })).toBeTruthy();
   });
 
   it("renders PROPOSE_COMMAND card", () => {

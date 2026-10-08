@@ -3,7 +3,18 @@ export type OrchestratorIntent =
   | "ANSWER_CLARIFICATION"
   | "PROPOSE_COMMAND"
   | "NAVIGATE"
-  | "OUT_OF_SCOPE";
+  | "OUT_OF_SCOPE"
+  | "REVISION_NOTE_DRAFT";
+
+export type OrchestratorFocus = {
+  subject_type: string;
+  subject_id: string;
+};
+
+export type OrchestratorRevisionNoteDraft = {
+  approval_id: string;
+  note: string;
+};
 
 export type OrchestratorProposal = {
   command: string;
@@ -26,6 +37,9 @@ export type OrchestratorTurn = {
   intent?: OrchestratorIntent;
   proposal?: OrchestratorProposal | null;
   clarification_answer_draft?: OrchestratorClarificationDraft | null;
+  revision_note_draft?: OrchestratorRevisionNoteDraft | null;
+  navigate_to?: string | null;
+  refs?: string[];
 };
 
 export type OrchestratorSession = {

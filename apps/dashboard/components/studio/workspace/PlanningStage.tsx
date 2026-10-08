@@ -23,6 +23,7 @@ import {
   generateTaskPlan,
   requestImplementationSpecApproval,
 } from "@/src/api/commands";
+import { useRegisterStudioFocus } from "@/lib/studio-focus";
 import { useState } from "react";
 
 type PlanningTab = "impl" | "plan" | "dag";
@@ -38,6 +39,15 @@ export function PlanningStage({ projectId, cycleId }: { projectId: string; cycle
   const plans = useTaskPlans(cycleId);
   const dagView = useTaskDagView(cycleId);
   const latestPlan = plans.data?.[0];
+  const [focusSpecId, setFocusSpecId] = useState<string | undefined>();
+
+  useRegisterStudioFocus(
+    focusSpecId
+      ? { subject_type: "implementation_spec", subject_id: focusSpecId }
+      : tab === "plan" && latestPlan
+        ? { subject_type: "task_plan", subject_id: latestPlan.id }
+        : null,
+  );
 
   const featureRows = features.data ?? [];
 
@@ -82,7 +92,15 @@ export function PlanningStage({ projectId, cycleId }: { projectId: string; cycle
             <EmptyState title="No features" description="Complete product modeling first." />
           )}
           {featureRows.map((f) => (
-            <FeatureImplSpecs key={f.id} featureId={f.id} featureKey={f.key} cycleId={cycleId} scope={scope} />
+            <FeatureImplSpecs
+              key={f.id}
+              featureId={f.id}
+              featureKey={f.key}
+              cycleId={cycleId}
+              scope={scope}
+              focusSpecId={focusSpecId}
+              onFocusSpec={setFocusSpecId}
+            />
           ))}
         </Panel>
       )}
@@ -160,11 +178,15 @@ function FeatureImplSpecs({
   featureKey,
   cycleId,
   scope,
+  focusSpecId,
+  onFocusSpec,
 }: {
   featureId: string;
   featureKey: string;
   cycleId: string;
   scope: { projectId: string; cycleId: string };
+  focusSpecId?: string;
+  onFocusSpec: (id: string) => void;
 }) {
   void scope.projectId;
   const specs = useImplementationSpecs(featureId);
@@ -180,6 +202,13 @@ function FeatureImplSpecs({
       <ul className="ol-ws-list">
         {(specs.data ?? []).map((s) => (
           <li key={s.id} className="ol-ws-row">
+            <button
+              type="button"
+              className={`ol-ws-list-btn ${focusSpecId === s.id ? "is-on" : ""}`}
+              onClick={() => onFocusSpec(s.id)}
+            >
+              Focus
+            </button>
             <span className="ol-id">v{s.version}</span>
             <StatusBadge status={s.status} />
             <StudioMutationAction

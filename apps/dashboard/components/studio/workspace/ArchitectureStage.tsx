@@ -5,6 +5,7 @@ import { ExceptionState } from "@/components/truth/ExceptionState";
 import { RunningNotice } from "@/components/studio/workspace/RunningNotice";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
 import { StudioMutationAction } from "@/components/studio/workspace/StudioMutationAction";
+import { useRegisterStudioFocus } from "@/lib/studio-focus";
 import { useProjectArchitecture } from "@/src/api/hooks/use-studio-queries";
 import { proposeArchitecture, requestArchitectureApproval } from "@/src/api/commands";
 import { useState } from "react";
@@ -14,6 +15,9 @@ export function ArchitectureStage({ projectId, cycleId }: { projectId: string; c
   const [runningExecutionId, setRunningExecutionId] = useState<string | null>(null);
 
   const arch = architecture.data;
+  useRegisterStudioFocus(
+    arch ? { subject_type: "architecture", subject_id: arch.id } : null,
+  );
 
   return (
     <StageWorkspaceFrame>

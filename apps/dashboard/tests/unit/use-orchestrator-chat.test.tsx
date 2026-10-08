@@ -68,6 +68,52 @@ describe("useOrchestratorChat", () => {
     clearStoredSession("cycle-1");
   });
 
+  it("sends studio focus on postTurn when provided", async () => {
+    writeStoredSession("cycle-1", {
+      sessionId: "sess-1",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes("/turns") && init?.method === "POST") {
+        const body = JSON.parse(init.body as string) as Record<string, unknown>;
+        expect(body.focus).toEqual({
+          subject_type: "architecture",
+          subject_id: "arch-9",
+        });
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ execution_id: "ex-focus" }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            id: "sess-1",
+            project_id: "p1",
+            delivery_cycle_id: "cycle-1",
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+            turns: [],
+          }),
+      } as Response;
+    });
+
+    const { result } = renderHook(() =>
+      useOrchestratorChat("p1", "cycle-1", {
+        subject_type: "architecture",
+        subject_id: "arch-9",
+      }),
+    );
+    await waitFor(() => expect(result.current.sessionId).toBe("sess-1"));
+    await act(async () => {
+      await result.current.send("Review this architecture");
+    });
+  });
+
   it("resolves pending via onTurnCompleted", async () => {
     writeStoredSession("cycle-1", {
       sessionId: "sess-1",

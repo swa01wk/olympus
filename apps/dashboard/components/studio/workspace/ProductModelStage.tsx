@@ -19,6 +19,7 @@ import {
   useAllFeatureSpecSummaries,
   useFeatures,
 } from "@/src/api/hooks/use-studio-queries";
+import { useRegisterStudioFocus } from "@/lib/studio-focus";
 import { requestScopeApproval } from "@/src/api/commands";
 import { useMemo, useState } from "react";
 
@@ -123,6 +124,10 @@ export function ProductModelStage({
     }
     return map;
   }, [features]);
+
+  useRegisterStudioFocus(
+    activeSpecId ? { subject_type: "feature_spec", subject_id: activeSpecId } : null,
+  );
 
   const scopeSpecIds = useMemo(() => {
     const ids: string[] = [];

@@ -5,6 +5,7 @@ import { Button } from "@/components/primitives";
 import { previewOrchestratorTurn } from "@/lib/command-preview";
 import { uploadProductSource } from "@/src/api/commands";
 import { listSources } from "@/src/api/resources";
+import { useStudioFocus } from "@/lib/studio-focus";
 import { useOrchestratorChat } from "@/src/api/hooks/use-orchestrator-chat";
 import { useClarifications } from "@/src/api/hooks/use-studio-queries";
 import type { DeliveryCycle } from "@/src/api/types/core";
@@ -27,7 +28,8 @@ export function ChatPanel({
 }) {
   const cycleId = cycle.id;
   const cycleState = cycle.state;
-  const chat = useOrchestratorChat(projectId, cycleId);
+  const focus = useStudioFocus();
+  const chat = useOrchestratorChat(projectId, cycleId, focus);
   const clarifications = useClarifications("OPEN");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);

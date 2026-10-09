@@ -21,6 +21,13 @@ class _SentinelState(TypedDict, total=False):
     model_call_ids: list[str]
 
 
+def _json_text(value: object) -> str:
+    """Snapshot lists arrive JSON-encoded from the contract ``_snapshot``."""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value or [], indent=2)
+
+
 def _build_sentinel_plan_graph(deps: GraphDeps) -> Any:
     from langgraph.graph import END, StateGraph
 
@@ -111,8 +118,8 @@ def _build_sentinel_characterize_graph(deps: GraphDeps) -> Any:
         system = render_prompt(
             template,
             {
-                "acs_json": json.dumps(snap.get("acs") or [], indent=2),
-                "behaviors_json": json.dumps(snap.get("behaviors") or [], indent=2),
+                "acs_json": _json_text(snap.get("acs")),
+                "behaviors_json": _json_text(snap.get("behaviors")),
                 "index_summary": str(snap.get("index_summary", "[]")),
                 "code_excerpt": str(snap.get("code_excerpt", "")),
             },
@@ -180,7 +187,15 @@ def register_sentinel_profiles() -> None:
             async def repro_node(state: _SentinelState) -> _SentinelState:
                 template = load_prompt("agents/sentinel/prompts/reproduce.md")
                 snap = deps.request.snapshot or {}
-                system = render_prompt(template, {"triage_json": str(snap.get("triage_json", ""))})
+                system = render_prompt(
+                    template,
+                    {
+                        "triage_json": str(snap.get("triage_json", "")),
+                        "defect_description": str(snap.get("defect_description", "")),
+                        "index_summary": str(snap.get("index_summary", "")),
+                        "code_excerpt": str(snap.get("code_excerpt", "")),
+                    },
+                )
                 result = await deps.model_router.invoke(
                     ModelRequest(
                         purpose="sentinel.reproduce",

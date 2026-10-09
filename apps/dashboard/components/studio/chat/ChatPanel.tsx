@@ -30,7 +30,7 @@ export function ChatPanel({
   const cycleState = cycle.state;
   const focus = useStudioFocus();
   const chat = useOrchestratorChat(projectId, cycleId, focus);
-  const clarifications = useClarifications("OPEN");
+  const clarifications = useClarifications(projectId, "OPEN");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());

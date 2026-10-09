@@ -6,8 +6,8 @@ import uuid
 import pytest
 from core.commands.context import CommandContext
 from core.domain.actors.models import Actor
-from core.domain.enums import LeaseState
-from core.domain.executions.models import ExecutionLease
+from core.domain.enums import ExecutionStatus, LeaseState
+from core.domain.executions.models import Execution, ExecutionLease
 from core.execution.leases.manager import LeaseManager
 from core.scheduler.admission import AdmissionService
 from sqlalchemy import select
@@ -39,13 +39,30 @@ async def test_concurrent_claim_one_wins(async_engine) -> None:
             lease = await LeaseManager().claim(session, f"w-{uuid.uuid4().hex[:4]}", ctx)
             leases.append(lease)
 
-    await asyncio.gather(claim_once(), claim_once())
+    async with factory() as session:
+        execution_id = (
+            await session.execute(select(Execution.id).where(Execution.task_id == task_id))
+        ).scalar_one()
+
+    # The database is shared across the session: hold row locks on every other queued
+    # execution so claim()'s SKIP LOCKED can only reach this test's execution.
+    async with factory() as blocker, blocker.begin():
+        await blocker.execute(
+            select(Execution.id)
+            .where(Execution.status == ExecutionStatus.QUEUED, Execution.id != execution_id)
+            .with_for_update()
+        )
+        await asyncio.gather(claim_once(), claim_once())
     winners = [lease for lease in leases if lease is not None]
     assert len(winners) == 1
     assert winners[0].state == LeaseState.ACTIVE
+    assert winners[0].execution_id == execution_id
 
     async with factory() as session:
         active = await session.execute(
-            select(ExecutionLease).where(ExecutionLease.state == LeaseState.ACTIVE)
+            select(ExecutionLease).where(
+                ExecutionLease.execution_id == execution_id,
+                ExecutionLease.state == LeaseState.ACTIVE,
+            )
         )
         assert len(list(active.scalars())) == 1

@@ -109,7 +109,7 @@ export async function registerRepository(
 }
 
 export async function putSecret(name: string, value: string, idempotencyKey?: string) {
-  return apiRequest<{ credential_ref: string }>(`/secrets/${name}`, {
+  return apiRequest<{ credential_ref: string }>(`/secrets/${encodeURIComponent(name)}`, {
     method: "PUT",
     body: { value },
     idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
@@ -159,6 +159,38 @@ export async function recordPromotionDecision(
     method: "POST",
     body,
     idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+  });
+}
+
+export type InboundIntakeResponse = {
+  status: "ACCEPTED" | "DUPLICATE" | "REJECTED";
+  reason?: string;
+  result?: { delivery_cycle_id?: string; cycle_id?: string; defect_id?: string };
+};
+
+export type IntakeBody = { title: string; description: string; external_ref?: string | null };
+
+export async function intakeChangeRequest(
+  projectId: string,
+  body: IntakeBody,
+  idempotencyKey: string = newIdempotencyKey(),
+) {
+  return apiRequest<InboundIntakeResponse>(`/projects/${projectId}/change-requests`, {
+    method: "POST",
+    body: { external_ref: null, ...body },
+    idempotencyKey,
+  });
+}
+
+export async function intakeDefect(
+  projectId: string,
+  body: IntakeBody,
+  idempotencyKey: string = newIdempotencyKey(),
+) {
+  return apiRequest<InboundIntakeResponse>(`/projects/${projectId}/defects`, {
+    method: "POST",
+    body: { external_ref: null, ...body },
+    idempotencyKey,
   });
 }
 
@@ -316,7 +348,7 @@ export async function runImpactAssessment(
 }
 
 export async function proposeArchitectureDelta(cycleId: string, idempotencyKey?: string) {
-  return apiRequest<Record<string, string>>(
+  return apiRequest<{ architecture_delta_task_id: string }>(
     `/delivery-cycles/${cycleId}/architecture-delta/propose`,
     { method: "POST", idempotencyKey: idempotencyKey ?? newIdempotencyKey() },
   );

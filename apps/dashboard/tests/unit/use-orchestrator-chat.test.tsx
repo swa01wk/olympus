@@ -226,6 +226,65 @@ describe("useOrchestratorChat", () => {
     expect(result.current.lines.some((l) => l.kind === "assistant")).toBe(true);
     expect(result.current.lines.some((l) => l.kind === "pending")).toBe(false);
   });
+
+  it("keeps waiting when only the stored user turn appears, then shows the reply", async () => {
+    vi.useFakeTimers();
+    writeStoredSession("cycle-1", {
+      sessionId: "sess-1",
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    const fetchMock = vi.mocked(fetch);
+    let posted = false;
+    let replied = false;
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes("/turns") && init?.method === "POST") {
+        posted = true;
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ execution_id: "ex-real" }),
+        } as Response;
+      }
+      const turns: Record<string, unknown>[] = [];
+      if (posted) turns.push({ role: "user", text: "Propose" });
+      if (replied) {
+        turns.push({ role: "assistant", text: "Ok", intent: "EXPLAIN", execution_id: "ex-real" });
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            id: "sess-1",
+            turns,
+            expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          }),
+      } as Response;
+    });
+
+    const { result } = renderHook(() => useOrchestratorChat("p1", "cycle-1"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await result.current.send("Propose");
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync((POLL_MS + 100) * 3);
+    });
+    expect(result.current.lines.some((l) => l.kind === "pending")).toBe(true);
+
+    replied = true;
+    await act(async () => {
+      result.current.onTurnCompleted({ execution_id: "ex-real" });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.lines.some((l) => l.kind === "assistant")).toBe(true);
+    expect(result.current.lines.some((l) => l.kind === "pending")).toBe(false);
+  });
 });
 
 function createSessionCalls(fetchMock: ReturnType<typeof vi.fn>) {

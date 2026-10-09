@@ -7,6 +7,7 @@ import signal
 import uuid
 from typing import Any
 
+import core.domain.registry  # noqa: F401  # every mapper must be registered before first use
 from core.bootstrap.connectors import ensure_connectors_registered
 from core.commands.context import CommandContext
 from core.config.settings import get_settings

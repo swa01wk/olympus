@@ -26,6 +26,14 @@ export function previewCreateCycle(
   return `POST /projects/${projectId}/delivery-cycles · type=${type} · objective=${truncateText(objective, 64)}${repoHint}`;
 }
 
+export function previewIntake(
+  projectId: string,
+  kind: "change-requests" | "defects",
+  title: string,
+): string {
+  return `POST /projects/${projectId}/${kind} · title=${truncateText(title, 64)} · description=…`;
+}
+
 export function previewPutSecret(name: string): string {
   return `PUT /secrets/${name} · value=…`;
 }

@@ -245,16 +245,17 @@ async def finalize_all_pending_gates(
     ic_id: uuid.UUID,
     ctx: CommandContext,
 ) -> list[Gate]:
+    """Finalize gates no producer finalized; return every gate for the IC."""
     finalizer = GateFinalizerService()
-    out: list[Gate] = []
-    gates = (
-        await session.execute(select(Gate).where(Gate.integration_candidate_id == ic_id))
-    ).scalars()
+    gates = list(
+        (
+            await session.execute(select(Gate).where(Gate.integration_candidate_id == ic_id))
+        ).scalars()
+    )
     for gate in gates:
-        if gate.status != GateStatus.PENDING:
-            continue
-        out.append(await finalizer.finalize(session, gate.id, ctx))
-    return out
+        if gate.status == GateStatus.PENDING:
+            await finalizer.finalize(session, gate.id, ctx)
+    return gates
 
 
 async def build_ic_with_lineage(

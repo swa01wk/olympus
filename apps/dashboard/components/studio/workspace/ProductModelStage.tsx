@@ -93,7 +93,7 @@ export function ProductModelStage({
   const scope = { projectId, cycleId };
   const capabilities = useCapabilities(projectId);
   const features = useFeatures(projectId);
-  const clarifications = useClarifications("OPEN");
+  const clarifications = useClarifications(projectId, "OPEN");
   const scopePending = inbox.some(
     (i) => i.approval?.approval_type === "SCOPE" && i.approval.status === "PENDING",
   );

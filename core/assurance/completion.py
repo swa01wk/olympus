@@ -14,6 +14,7 @@ from core.assurance.enums import (
     EvidenceProducer,
     EvidenceResult,
     EvidenceType,
+    GateType,
     VerificationPlanStatus,
 )
 from core.assurance.evidence import EvidenceService
@@ -24,7 +25,9 @@ from core.assurance.orchestrator import AssuranceOrchestrator
 from core.assurance.plan_validation import PlanValidationService
 from core.assurance.schemas import SentinelRecommendation, VerificationPlan, WardenReview
 from core.commands.context import CommandContext
+from core.domain.artifacts.models import Artifact
 from core.domain.delivery_cycles.models import DeliveryCycle
+from core.domain.exceptions import DomainError
 from core.domain.executions.models import Execution
 from core.domain.task_contracts.schemas import TaskContractBody
 from core.execution.artifacts import ArtifactStore
@@ -59,7 +62,7 @@ class AssuranceCompletionService:
         if ic_id is None:
             return
         await CoverageService().recompute_for_ic(session, ic_id, ctx)
-        await self._try_finalize_gates(session, ic_id, ctx)
+        await self._try_finalize_gates(session, ic_id, ctx, GateType.SENTINEL)
 
     async def _persist_warden(
         self,
@@ -76,17 +79,24 @@ class AssuranceCompletionService:
         cycle = await session.get(DeliveryCycle, execution.delivery_cycle_id)
         if ic is None or cycle is None or ic.integrated_sha is None:
             return
-        store = ArtifactStore()
-        artifact = await store.put(
-            session,
-            project_id=cycle.project_id,
-            delivery_cycle_id=cycle.id,
-            execution_id=execution.id,
-            kind="WARDEN_REVIEW",
-            schema_name="WardenReview",
-            schema_version="1",
-            content=review.model_dump(mode="json"),
-        )
+        artifact = (
+            await session.execute(
+                select(Artifact).where(
+                    Artifact.execution_id == execution.id, Artifact.kind == "WARDEN_REVIEW"
+                )
+            )
+        ).scalar_one_or_none()
+        if artifact is None:
+            artifact = await ArtifactStore().put(
+                session,
+                project_id=cycle.project_id,
+                delivery_cycle_id=cycle.id,
+                execution_id=execution.id,
+                kind="WARDEN_REVIEW",
+                schema_name="WardenReview",
+                schema_version="1",
+                content=review.model_dump(mode="json"),
+            )
         session.add(
             WardenReviewRecord(
                 integration_candidate_id=ic.id,
@@ -156,7 +166,7 @@ class AssuranceCompletionService:
             check_artifact_id=artifact.id,
             execution_id=execution.id,
         )
-        await self._try_finalize_gates(session, ic.id, ctx)
+        await self._try_finalize_gates(session, ic.id, ctx, GateType.WARDEN)
 
     async def _persist_sentinel_plan(
         self,
@@ -174,15 +184,32 @@ class AssuranceCompletionService:
         except Exception:
             plan = await build_plan_from_verifies_links(session, ic_id)
         ok, report = await PlanValidationService().validate(session, ic_id, plan)
+        adopted = (
+            await session.execute(
+                select(VerificationPlanRow.id).where(
+                    VerificationPlanRow.integration_candidate_id == ic_id,
+                    VerificationPlanRow.status == VerificationPlanStatus.VALIDATED,
+                )
+            )
+        ).first()
+        if not ok:
+            status = VerificationPlanStatus.REJECTED
+        elif adopted is not None:
+            # One adopted plan per IC: a valid plan arriving after the deterministic one stays
+            # PROPOSED so SENTINEL is evaluated against a single execution.
+            status = VerificationPlanStatus.PROPOSED
+            report = {**report, "not_adopted": "VALIDATED_PLAN_EXISTS"}
+        else:
+            status = VerificationPlanStatus.VALIDATED
         row = VerificationPlanRow(
             integration_candidate_id=ic_id,
             execution_id=execution.id,
-            status=VerificationPlanStatus.VALIDATED if ok else VerificationPlanStatus.REJECTED,
+            status=status,
             validation_report={**report, "plan": plan.model_dump(mode="json")},
         )
         session.add(row)
         await session.flush()
-        if ok:
+        if status == VerificationPlanStatus.VALIDATED:
             await AssuranceOrchestrator()._schedule_sentinel_execute(session, ic_id, row.id, ctx)
 
     async def _persist_sentinel_summary(
@@ -215,31 +242,28 @@ class AssuranceCompletionService:
         session: AsyncSession,
         ic_id: uuid.UUID,
         ctx: CommandContext,
+        gate_type: GateType,
     ) -> None:
-        from core.assurance.enums import GateStatus, GateType
+        """Finalize the gate whose evidence the completing producer just supplied.
+
+        Other gates stay PENDING: finalizing them now would lock in FAIL before their own
+        producers report.
+        """
+        from core.assurance.enums import GateStatus
         from core.assurance.models import Gate
 
         gates = await session.execute(
             select(Gate).where(
                 Gate.integration_candidate_id == ic_id,
+                Gate.gate_type == gate_type,
                 Gate.status == GateStatus.PENDING,
             )
         )
         finalizer = GateFinalizerService()
-        system_ctx = ctx
         for gate in gates.scalars():
-            if gate.gate_type == GateType.SENTINEL:
-                plan = await session.execute(
-                    select(VerificationPlanRow).where(
-                        VerificationPlanRow.integration_candidate_id == ic_id,
-                        VerificationPlanRow.status == VerificationPlanStatus.VALIDATED,
-                    )
-                )
-                if plan.scalar_one_or_none() is None:
-                    continue
             try:
-                await finalizer.finalize(session, gate.id, system_ctx)
-            except Exception:
+                await finalizer.finalize(session, gate.id, ctx)
+            except DomainError:
                 continue
 
     async def _ic_from_contract(

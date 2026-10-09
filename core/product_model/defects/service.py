@@ -36,6 +36,8 @@ from core.product_model.defects.triage import (
 from core.product_model.models import AcceptanceCriterion, Feature, FeatureSpec
 from core.product_model.sources.service import ProductSourceService
 
+_MAX_AC_CITATIONS = 80
+
 
 class DefectService:
     async def intake(
@@ -221,6 +223,70 @@ class DefectService:
         )
         return defect
 
+    async def approved_ac_citations(
+        self, session: AsyncSession, defect: Defect
+    ) -> list[dict[str, Any]]:
+        """Approved ACs of the project, triaged features first, cited as ``SPEC/AC``.
+
+        Recovered AC lineage keys (``AC-1``) repeat across specs, so citations carry the spec key.
+        """
+        triage = defect.triage or {}
+        focus = {
+            str(k)
+            for k in [
+                *(triage.get("feature_keys") or []),
+                *(triage.get("suspected_ac_lineage_keys") or []),
+            ]
+        }
+        rows = (
+            await session.execute(
+                select(Feature.key, FeatureSpec.lineage_key, AcceptanceCriterion)
+                .join(FeatureSpec, AcceptanceCriterion.feature_spec_id == FeatureSpec.id)
+                .join(Feature, Feature.id == FeatureSpec.feature_id)
+                .where(
+                    FeatureSpec.project_id == defect.project_id,
+                    FeatureSpec.status == SpecStatus.APPROVED,
+                )
+                .order_by(FeatureSpec.lineage_key, AcceptanceCriterion.lineage_key)
+            )
+        ).all()
+        ranked = sorted(rows, key=lambda r: not ({r[0], r[1], r[2].lineage_key} & focus))
+        return [
+            {
+                "citation": f"{spec_key}/{ac.lineage_key}",
+                "feature_key": feature_key,
+                "statement": ac.statement,
+                "given": ac.given,
+                "when": ac.when,
+                "then": ac.then,
+            }
+            for feature_key, spec_key, ac in ranked[:_MAX_AC_CITATIONS]
+        ]
+
+    async def _resolve_ac_citation(
+        self, session: AsyncSession, project_id: uuid.UUID, citation: str
+    ) -> AcceptanceCriterion:
+        spec_key, _, ac_key = citation.rpartition("/")
+        stmt = (
+            select(AcceptanceCriterion)
+            .join(FeatureSpec, AcceptanceCriterion.feature_spec_id == FeatureSpec.id)
+            .where(
+                FeatureSpec.project_id == project_id,
+                FeatureSpec.status == SpecStatus.APPROVED,
+                AcceptanceCriterion.lineage_key == ac_key,
+            )
+        )
+        if spec_key:
+            stmt = stmt.where(FeatureSpec.lineage_key == spec_key)
+        matches = (await session.execute(stmt)).scalars().all()
+        if not matches:
+            raise DomainError(code="INVALID_INPUT", message=f"AC not approved: {citation}")
+        if len(matches) > 1:
+            raise DomainError(
+                code="INVALID_INPUT", message=f"AC citation ambiguous, cite SPEC/AC: {citation}"
+            )
+        return matches[0]
+
     async def persist_expected_behavior(
         self,
         session: AsyncSession,
@@ -236,19 +302,8 @@ class DefectService:
         ac_ids: list[str] = []
         resolution_kind = "SPECIFIED"
         if proposal.classification == "SPECIFIED":
-            for lk in proposal.cited_ac_lineage_keys:
-                ac = (
-                    await session.execute(
-                        select(AcceptanceCriterion)
-                        .join(FeatureSpec, AcceptanceCriterion.feature_spec_id == FeatureSpec.id)
-                        .where(
-                            FeatureSpec.status == SpecStatus.APPROVED,
-                            AcceptanceCriterion.lineage_key == lk,
-                        )
-                    )
-                ).scalar_one_or_none()
-                if ac is None:
-                    raise DomainError(code="INVALID_INPUT", message=f"AC not approved: {lk}")
+            for citation in proposal.cited_ac_lineage_keys:
+                ac = await self._resolve_ac_citation(session, defect.project_id, citation)
                 ac_ids.append(str(ac.id))
         elif proposal.classification == "NOT_A_DEFECT":
             resolution_kind = "NOT_A_DEFECT"

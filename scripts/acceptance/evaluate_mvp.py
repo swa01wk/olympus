@@ -399,12 +399,14 @@ def main() -> int:
     factory = create_session_factory()
 
     async def _resolve() -> uuid.UUID:
-        async with factory() as session:
-            pid, _ = await _resolve_project_id(session, args.project)
-            return pid
+        try:
+            async with factory() as session:
+                pid, _ = await _resolve_project_id(session, args.project)
+                return pid
+        finally:
+            await dispose_engine()
 
     project_id = asyncio.run(_resolve())
-    await dispose_engine()
     reset_session_factory()
     clear_settings_cache()
 

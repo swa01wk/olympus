@@ -161,6 +161,14 @@ BROWNFIELD_MACHINE = Machine(
         ),
         (
             "RECOVERED_SPEC",
+            "retry_spec_recovery",
+        ): Edge(
+            to="RECOVERED_SPEC",
+            guards=("recovery_proposal_rejected",),
+            effects=("brownfield_spec_recovery_retry",),
+        ),
+        (
+            "RECOVERED_SPEC",
             "start_baseline",
         ): Edge(
             to="BASELINE",

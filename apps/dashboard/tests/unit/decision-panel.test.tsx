@@ -1,8 +1,13 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DecisionPanel } from "@/components/studio/DecisionPanel";
+import { RevisionNoteDraftCard } from "@/components/studio/chat/RevisionNoteDraftCard";
+import { StudioDecisionNoteProvider } from "@/lib/studio-decision-note";
 import type { InboxItem, TransitionPreview } from "@/src/api/types/core";
+import type { ArchitectureView } from "@/src/api/types/product-model";
+
+let projectArchitecture: ArchitectureView | null = null;
 
 vi.mock("@/src/api/hooks/use-olympus-queries", () => ({
   useActorMe: () => ({ data: { roles: ["OPERATOR"] } }),
@@ -24,7 +29,7 @@ vi.mock("@/src/api/hooks/use-studio-queries", () => ({
     },
   }),
   useFeatureSpecDetail: () => ({ data: null }),
-  useProjectArchitecture: () => ({ data: null }),
+  useProjectArchitecture: () => ({ data: projectArchitecture }),
   useReleaseManifest: () => ({ data: null }),
 }));
 
@@ -70,7 +75,29 @@ function wrap(ui: React.ReactNode) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  projectArchitecture = null;
+});
+
+function approvalInbox(approvalType: string, subjectId = "sub-1"): InboxItem[] {
+  return [
+    {
+      kind: "APPROVAL",
+      id: `inbox-${approvalType}`,
+      title: approvalType,
+      approval: {
+        id: `apr-${approvalType}`,
+        key: `APR-${approvalType}`,
+        approval_type: approvalType,
+        subject_type: "x",
+        subject_id: subjectId,
+        subject_hash: "hash",
+        status: "PENDING",
+      },
+    },
+  ];
+}
 
 describe("DecisionPanel", () => {
   it("shows read-only APPROVER message for OPERATOR-only actor", () => {
@@ -78,6 +105,7 @@ describe("DecisionPanel", () => {
       <DecisionPanel
         stage="PRODUCT_MODEL"
         cycleType="GREENFIELD_BUILD"
+        cycleState="PRODUCT_MODEL"
         inbox={inbox}
         projectId="p1"
         nextTransitions={transitions}
@@ -90,11 +118,33 @@ describe("DecisionPanel", () => {
     expect(screen.getByText(/agent will revise using your note/i)).toBeTruthy();
   });
 
+  it("fills the note from a chat revision draft while already open", () => {
+    wrap(
+      <StudioDecisionNoteProvider>
+        <DecisionPanel
+          stage="PRODUCT_MODEL"
+          cycleType="GREENFIELD_BUILD"
+          cycleState="PRODUCT_MODEL"
+          inbox={inbox}
+          projectId="p1"
+          nextTransitions={transitions}
+          onDecided={() => {}}
+        />
+        <RevisionNoteDraftCard draft={{ approval_id: "apr-1", note: "Split the guard" }} />
+      </StudioDecisionNoteProvider>,
+    );
+    const note = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(note.value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Use in decision panel" }));
+    expect(note.value).toBe("Split the guard");
+  });
+
   it("hidden when no pending approval for stage", () => {
     const { container } = wrap(
       <DecisionPanel
         stage="DISCOVERY"
         cycleType="GREENFIELD_BUILD"
+        cycleState="PRODUCT_MODEL"
         inbox={inbox}
         projectId="p1"
         nextTransitions={transitions}
@@ -109,6 +159,7 @@ describe("DecisionPanel", () => {
       <DecisionPanel
         stage="ROOT_CAUSE"
         cycleType="BUG_FIX"
+        cycleState="ROOT_CAUSE"
         inbox={[
           {
             kind: "APPROVAL",
@@ -139,6 +190,7 @@ describe("DecisionPanel", () => {
       <DecisionPanel
         stage="IMPACT_ANALYSIS"
         cycleType="FEATURE_CHANGE"
+        cycleState="IMPACT_ANALYSIS"
         inbox={[
           {
             kind: "APPROVAL",
@@ -162,5 +214,59 @@ describe("DecisionPanel", () => {
     );
     expect(screen.getByText(/Decision required/i)).toBeTruthy();
     expect(screen.getByText(/ARCHITECTURE_DELTA · APR-AD/)).toBeTruthy();
+  });
+
+  it("says no agent revises EXPECTED_BEHAVIOR", () => {
+    wrap(
+      <DecisionPanel
+        stage="EXPECTED_BEHAVIOR"
+        cycleType="BUG_FIX"
+        cycleState="EXPECTED_BEHAVIOR"
+        inbox={approvalInbox("EXPECTED_BEHAVIOR")}
+        projectId="p1"
+        nextTransitions={[]}
+        onDecided={() => {}}
+      />,
+    );
+    expect(screen.getByText(/no agent revises this item/i)).toBeTruthy();
+    expect(screen.queryByText(/until revision support ships/i)).toBeNull();
+  });
+
+  it("says no agent revises SCOPE once the cycle left PRODUCT_MODEL", () => {
+    wrap(
+      <DecisionPanel
+        stage="PRODUCT_MODEL"
+        cycleType="GREENFIELD_BUILD"
+        cycleState="ARCHITECTURE"
+        inbox={inbox}
+        projectId="p1"
+        nextTransitions={[]}
+        onDecided={() => {}}
+      />,
+    );
+    expect(screen.getByText(/no agent revises this item/i)).toBeTruthy();
+  });
+
+  it("uses the architecture kind: ARCHITECTURE approval on a DELTA subject is not revised", () => {
+    projectArchitecture = {
+      id: "arch-d",
+      version: 2,
+      status: "PROPOSED",
+      kind: "DELTA",
+      body: {},
+      contracts: [],
+    };
+    wrap(
+      <DecisionPanel
+        stage="ARCHITECTURE"
+        cycleType="GREENFIELD_BUILD"
+        cycleState="ARCHITECTURE"
+        inbox={approvalInbox("ARCHITECTURE", "arch-d")}
+        projectId="p1"
+        nextTransitions={[]}
+        onDecided={() => {}}
+      />,
+    );
+    expect(screen.getByText(/no agent revises this item/i)).toBeTruthy();
   });
 });

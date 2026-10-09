@@ -4,7 +4,7 @@ from typing import Literal
 
 from core.planning.schemas import ArchitectureBody, ImplementationSpecBody
 from core.product_model.schemas import FeatureSpecBody
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Citation(BaseModel):
@@ -66,6 +66,11 @@ class RecoveredAcDraft(BaseModel):
     confidence: Literal["HIGH", "MEDIUM", "LOW"]
 
 
+class PrincipalEntityLink(BaseModel):
+    stable_key: str
+    confidence: float = 0.7
+
+
 class RecoveredFeatureSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -75,7 +80,14 @@ class RecoveredFeatureSpec(BaseModel):
     requirements: list[RequirementDraft]
     acceptance_criteria: list[RecoveredAcDraft]
     implementation: ImplementationSpecBody | None = None
-    principal_entity_links: list[dict[str, object]]
+    principal_entity_links: list[PrincipalEntityLink]
     inferences: list[InferenceDraft]
     uncertainties: list[UncertaintyDraft]
     confidence: Literal["HIGH", "MEDIUM", "LOW"]
+
+    @field_validator("principal_entity_links", mode="before")
+    @classmethod
+    def _drop_keyless_links(cls, value: object) -> object:
+        if isinstance(value, list):
+            return [v for v in value if not isinstance(v, dict) or v.get("stable_key")]
+        return value

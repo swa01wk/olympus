@@ -69,15 +69,11 @@ class ImplementationSpecService:
         spec = await session.get(FeatureSpec, feature_spec_id)
         if spec is None:
             raise DomainError(code="NOT_FOUND", message="FeatureSpec not found")
-        arch = await self._arch.get_approved(session, spec.project_id)
-        if arch is None:
+        effective = await self._arch.effective(session, spec.project_id)
+        if effective is None:
             raise DomainError(code="INVALID_STATE", message="No approved architecture")
-        contracts = await self._arch.get_contracts(session, arch.id)
-        report = self._conformance.validate(
-            draft.body,
-            self._arch.parse_body(arch),
-            contracts,
-        )
+        arch, arch_body, contracts = effective
+        report = self._conformance.validate(draft.body, arch_body, contracts)
         if not report.ok:
             await append_domain_event(
                 session,

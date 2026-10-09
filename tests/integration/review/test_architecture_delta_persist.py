@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from agents.atlas.schemas import ArchitectureDeltaProposal
 from core.commands.handlers import handle_approval_decide
@@ -20,6 +22,7 @@ from core.domain.tasks.service import TaskService
 from core.intelligence.impact.enums import ImpactAssessmentStatus
 from core.intelligence.impact.guards import architecture_delta_resolved
 from core.intelligence.impact.models import ImpactAssessment
+from core.planning.architecture.service import ArchitectureService
 from core.planning.models import Architecture
 from core.planning.schemas import ComponentDef, DecisionDef
 from core.product_model.changes.completion import FeatureChangeCompletionService
@@ -167,3 +170,86 @@ async def test_architecture_delta_persist_approve_resolves_guard(
     assert refreshed is not None
     assert refreshed.status == SpecStatus.APPROVED
     assert (await architecture_delta_resolved(db_session, cycle, None)).ok
+
+    assert await ArchitectureService().get_approved(db_session, fx.project_id) is None
+
+
+def _base_body() -> dict[str, object]:
+    return {
+        "summary": "SupportDesk layered service",
+        "technology_stack": {
+            "language": "python",
+            "web": "fastapi",
+            "orm": "sqlalchemy",
+            "tests": "pytest",
+        },
+        "components": [
+            {
+                "name": "API layer",
+                "layer": "api",
+                "responsibility": "HTTP routes",
+                "directory": "app/api",
+            }
+        ],
+        "layers": ["api"],
+        "dependency_rules": [],
+        "directory_conventions": [],
+        "decisions": [],
+        "constraints": [],
+        "risks": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_planning_context_uses_base_architecture_with_approved_deltas(
+    db_session, system_ctx
+) -> None:
+    from core.execution.snapshots.planning_context import planning_prompt_fields_for_task
+
+    fx = await seed_supportdesk_ticket_priority_impact(db_session, system_ctx)
+    delta_body = _sample_delta_proposal().model_dump(mode="json")
+    for version, kind, body in ((1, "BASELINE", _base_body()), (2, "DELTA", delta_body)):
+        db_session.add(
+            Architecture(
+                project_id=fx.project_id,
+                version=version,
+                status=SpecStatus.APPROVED,
+                kind=kind,
+                body=body,
+                content_hash=f"arch-{version}",
+            )
+        )
+    await db_session.flush()
+
+    effective = await ArchitectureService().effective(db_session, fx.project_id)
+    assert effective is not None
+    base, body, _contracts = effective
+    assert base.version == 1
+    assert [c.name for c in body.components] == ["API layer", "priority_rules"]
+    assert [d.id for d in body.decisions] == ["D-PRI"]
+
+    task = await TaskService().create_task(
+        db_session,
+        fx.cycle_id,
+        "Draft implementation spec delta",
+        WorkType.ANALYSIS,
+        TaskOrigin.CONTROL_PLANE,
+        system_ctx,
+    )
+    task.governing_ref_id = fx.spec_v2_id
+    await db_session.flush()
+    fields = await planning_prompt_fields_for_task(
+        db_session, task, agent_profile="kira.implementation_spec"
+    )
+    summary = json.loads(str(fields["architecture_summary"]))
+    assert summary["valid_component_names"] == ["API layer", "priority_rules"]
+
+    atlas = await planning_prompt_fields_for_task(
+        db_session, task, agent_profile="atlas.architecture_delta"
+    )
+    assert [c["name"] for c in json.loads(str(atlas["architecture_summary"]))["components"]] == [
+        "API layer",
+        "priority_rules",
+    ]
+    impact = json.loads(str(atlas["impact_summary"]))
+    assert "change_request" in impact and "impact_items" in impact

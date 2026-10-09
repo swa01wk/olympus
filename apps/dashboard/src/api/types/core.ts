@@ -124,6 +124,23 @@ export type InboxApprovalNested = {
   status: string;
 };
 
+export type ApprovalView = {
+  id: string;
+  key: string;
+  approval_type: string;
+  subject_type: string;
+  subject_id: string;
+  subject_version: number;
+  subject_hash: string;
+  status: string;
+  project_id: string;
+  delivery_cycle_id: string | null;
+  created_at: string;
+  decided_by_actor_id: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+};
+
 export type InboxClarificationNested = {
   id: string;
   key: string;

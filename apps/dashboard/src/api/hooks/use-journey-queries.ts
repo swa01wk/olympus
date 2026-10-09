@@ -4,6 +4,7 @@ import { queryKeys } from "@/src/api/query-keys";
 import {
   getBrownfieldDiscovery,
   getChangeInterpretation,
+  getCurrentPolicy,
   getCycleSpecDelta,
   getDefect,
   getDefectRootCause,
@@ -87,6 +88,13 @@ export function useDefectRootCause(defectId: string | undefined) {
   });
 }
 
+export function useCurrentPolicy() {
+  return useQuery({
+    queryKey: queryKeys.policyCurrent,
+    queryFn: getCurrentPolicy,
+  });
+}
+
 export function useBrownfieldDiscovery(cycleId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.journey.discovery(cycleId ?? ""),
@@ -128,20 +136,26 @@ export function useReadinessAssessment(cycleId: string | undefined) {
   });
 }
 
-export function useProjectRepositories(projectId: string | undefined) {
+export function useProjectRepositories(
+  projectId: string | undefined,
+  opts?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: queryKeys.repositories.list(projectId ?? ""),
     queryFn: () => listProjectRepositories(projectId!),
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId) && (opts?.enabled ?? true),
   });
 }
 
-export function useRepository(repositoryId: string | undefined, opts?: { poll?: boolean }) {
+export function useRepository(
+  repositoryId: string | undefined,
+  opts?: { poll?: boolean; enabled?: boolean },
+) {
   const poll = opts?.poll ?? true;
   return useQuery({
     queryKey: queryKeys.repositories.detail(repositoryId ?? ""),
     queryFn: () => getRepository(repositoryId!),
-    enabled: Boolean(repositoryId),
+    enabled: Boolean(repositoryId) && (opts?.enabled ?? true),
     refetchInterval: (q) =>
       poll && repositoryId && q.state.data?.status
         ? repositoryPollMs(q.state.data.status)

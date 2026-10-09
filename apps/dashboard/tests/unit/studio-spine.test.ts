@@ -173,23 +173,52 @@ describe("inboxStagesForCycle", () => {
 });
 
 describe("findChangesRequestedApprovalForStage", () => {
+  const cr = {
+    id: "apr-cr",
+    approval_type: "SCOPE",
+    status: "CHANGES_REQUESTED",
+    delivery_cycle_id: "cyc-1",
+    created_at: "2026-10-08T10:00:00Z",
+  };
+
   it("matches CHANGES_REQUESTED approval on stage", () => {
-    const hit = findChangesRequestedApprovalForStage(
-      [
-        {
-          id: "apr-cr",
-          approval_type: "SCOPE",
-          status: "CHANGES_REQUESTED",
-          delivery_cycle_id: "cyc-1",
-          subject_type: "ScopeBundle",
-          subject_id: "s1",
-        },
-      ],
-      "PRODUCT_MODEL",
-      "GREENFIELD_BUILD",
-      "cyc-1",
-    );
+    const hit = findChangesRequestedApprovalForStage([cr], "PRODUCT_MODEL", "GREENFIELD_BUILD", "cyc-1");
     expect(hit?.id).toBe("apr-cr");
+  });
+
+  it("returns null once a newer approval for the stage is PENDING or APPROVED", () => {
+    for (const status of ["PENDING", "APPROVED"]) {
+      const newer = { ...cr, id: "apr-new", status, created_at: "2026-10-08T11:00:00Z" };
+      expect(
+        findChangesRequestedApprovalForStage([newer, cr], "PRODUCT_MODEL", "GREENFIELD_BUILD", "cyc-1"),
+      ).toBeNull();
+    }
+  });
+
+  it("picks the newest CHANGES_REQUESTED regardless of list order", () => {
+    const older = { ...cr, id: "apr-old", status: "APPROVED", created_at: "2026-10-08T09:00:00Z" };
+    const newest = { ...cr, id: "apr-newest", created_at: "2026-10-08T12:00:00Z" };
+    expect(
+      findChangesRequestedApprovalForStage(
+        [cr, newest, older],
+        "PRODUCT_MODEL",
+        "GREENFIELD_BUILD",
+        "cyc-1",
+      )?.id,
+    ).toBe("apr-newest");
+  });
+
+  it("ignores newer approvals for other cycles or stages", () => {
+    const otherCycle = { ...cr, id: "x1", status: "PENDING", delivery_cycle_id: "cyc-2", created_at: "2026-10-08T11:00:00Z" };
+    const otherStage = { ...cr, id: "x2", approval_type: "ARCHITECTURE", status: "PENDING", created_at: "2026-10-08T11:00:00Z" };
+    expect(
+      findChangesRequestedApprovalForStage(
+        [otherCycle, otherStage, cr],
+        "PRODUCT_MODEL",
+        "GREENFIELD_BUILD",
+        "cyc-1",
+      )?.id,
+    ).toBe("apr-cr");
   });
 });
 

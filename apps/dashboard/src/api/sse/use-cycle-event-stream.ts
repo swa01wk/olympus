@@ -16,6 +16,12 @@ type Options = {
   onEvent?: (event: DomainEventPayload) => void;
 };
 
+/**
+ * Workers emit events in bursts (dozens per decompose); each invalidate refetches every active
+ * cycle query, so per-event invalidation trips the control API's per-token rate limit.
+ */
+export const INVALIDATE_THROTTLE_MS = 2_000;
+
 export function useCycleEventStream(cycleId: string | undefined, options: Options = {}) {
   const enabled = options.enabled ?? Boolean(cycleId);
   const active = enabled && Boolean(cycleId);
@@ -40,6 +46,23 @@ export function useCycleEventStream(cycleId: string | undefined, options: Option
     if (!active || !cycleId) return;
     let cancelled = false;
     const ac = new AbortController();
+    let lastFlushAt = 0;
+    let trailingTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushInvalidate = () => {
+      trailingTimer = null;
+      if (cancelled) return;
+      lastFlushAt = Date.now();
+      setSnapshot((s) => ({ ...s, lastRefreshAt: new Date(lastFlushAt) }));
+      invalidateRef.current?.();
+    };
+
+    const scheduleInvalidate = () => {
+      if (trailingTimer) return;
+      const wait = lastFlushAt + INVALIDATE_THROTTLE_MS - Date.now();
+      if (wait <= 0) flushInvalidate();
+      else trailingTimer = setTimeout(flushInvalidate, wait);
+    };
 
     const run = async () => {
       while (!cancelled && !ac.signal.aborted) {
@@ -54,9 +77,8 @@ export function useCycleEventStream(cycleId: string | undefined, options: Option
                 lastEventIdRef.current = sequence;
               },
               onEvent: (event) => {
-                const now = new Date();
-                setSnapshot((s) => ({ ...s, lastEventAt: now, lastRefreshAt: now }));
-                invalidateRef.current?.();
+                setSnapshot((s) => ({ ...s, lastEventAt: new Date() }));
+                scheduleInvalidate();
                 onEventRef.current?.(event);
               },
             },
@@ -75,6 +97,7 @@ export function useCycleEventStream(cycleId: string | undefined, options: Option
     return () => {
       cancelled = true;
       ac.abort();
+      if (trailingTimer) clearTimeout(trailingTimer);
     };
   }, [cycleId, active]);
 

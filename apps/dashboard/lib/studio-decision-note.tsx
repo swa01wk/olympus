@@ -9,37 +9,57 @@ import {
   type ReactNode,
 } from "react";
 
+export type DecisionPanelHandle = {
+  approvalId: string;
+  element: HTMLElement | null;
+  applyNote: (note: string) => void;
+};
+
 type DecisionNoteContextValue = {
   applyDraftNote: (approvalId: string, note: string) => void;
-  registerDecisionPanel: (el: HTMLElement | null) => void;
-  consumePendingNote: (pendingApprovalId: string) => string | null;
+  /** Returns an unregister function. */
+  registerDecisionPanel: (handle: DecisionPanelHandle) => () => void;
+  /** Read-only so it is safe inside a lazy state initializer. */
+  peekPendingNote: (approvalId: string) => string | null;
+  clearPendingNote: (approvalId: string) => void;
 };
 
 const DecisionNoteContext = createContext<DecisionNoteContextValue | null>(null);
 
 export function StudioDecisionNoteProvider({ children }: { children: ReactNode }) {
-  const panelRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<DecisionPanelHandle | null>(null);
   const pendingRef = useRef<{ approvalId: string; note: string } | null>(null);
 
-  const registerDecisionPanel = useCallback((el: HTMLElement | null) => {
-    panelRef.current = el;
+  const registerDecisionPanel = useCallback((handle: DecisionPanelHandle) => {
+    panelRef.current = handle;
+    return () => {
+      if (panelRef.current === handle) panelRef.current = null;
+    };
   }, []);
 
   const applyDraftNote = useCallback((approvalId: string, note: string) => {
-    pendingRef.current = { approvalId, note };
-    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const panel = panelRef.current;
+    if (panel?.approvalId === approvalId) {
+      pendingRef.current = null;
+      panel.applyNote(note);
+    } else {
+      pendingRef.current = { approvalId, note };
+    }
+    panel?.element?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
-  const consumePendingNote = useCallback((pendingApprovalId: string) => {
+  const peekPendingNote = useCallback((approvalId: string) => {
     const pending = pendingRef.current;
-    if (!pending || pending.approvalId !== pendingApprovalId) return null;
-    pendingRef.current = null;
-    return pending.note;
+    return pending?.approvalId === approvalId ? pending.note : null;
+  }, []);
+
+  const clearPendingNote = useCallback((approvalId: string) => {
+    if (pendingRef.current?.approvalId === approvalId) pendingRef.current = null;
   }, []);
 
   const value = useMemo(
-    () => ({ applyDraftNote, registerDecisionPanel, consumePendingNote }),
-    [applyDraftNote, registerDecisionPanel, consumePendingNote],
+    () => ({ applyDraftNote, registerDecisionPanel, peekPendingNote, clearPendingNote }),
+    [applyDraftNote, registerDecisionPanel, peekPendingNote, clearPendingNote],
   );
 
   return <DecisionNoteContext.Provider value={value}>{children}</DecisionNoteContext.Provider>;

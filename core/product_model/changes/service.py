@@ -355,7 +355,8 @@ class ChangeRequestService:
             assert cr.resolved_feature_id is not None
             feature_id = cr.resolved_feature_id
         else:
-            feat_key = interpretation.feature_key or f"FEAT-{cr.key}"
+            # The model's feature_key may name an existing feature; new keys come from the sequence.
+            feat_key = await next_project_key(session, cr.project_id, "feature", prefix="FEAT")
             feature = Feature(
                 project_id=cr.project_id,
                 key=feat_key,

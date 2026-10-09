@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.assurance.pytest_node import junit_case_node_id
 from core.commands.context import CommandContext
 from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.enums import ActorKind
@@ -18,13 +19,13 @@ from core.repositories.workspace_locator import WorkspaceLocator
 from core.tools.handlers.test_runner import run_pytest_in_workspace
 
 
-def _parse_junit_cases(path: Path) -> list[dict[str, Any]]:
+def _parse_junit_cases(path: Path, workspace: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     root = ET.parse(path).getroot()
     cases: list[dict[str, Any]] = []
     for case in root.iter("testcase"):
-        nodeid = case.get("classname", "") + "::" + case.get("name", "")
+        nodeid = junit_case_node_id(workspace, case.get("classname", ""), case.get("name", ""))
         failed = case.find("failure") is not None or case.find("error") is not None
         cases.append({"nodeid": nodeid, "passed": not failed})
     return cases
@@ -75,7 +76,7 @@ async def run_brownfield_existing_tests(
             wt_path,
             {"runner": "pytest", "args": ["--junitxml=" + str(junit)]},
         )
-        cases = _parse_junit_cases(junit)
+        cases = _parse_junit_cases(junit, wt_path)
         payload: dict[str, Any] = {
             **result,
             "cases": cases,

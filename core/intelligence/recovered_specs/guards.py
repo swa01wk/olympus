@@ -35,6 +35,42 @@ async def canonical_repository_index_ready(
     return GuardResult(ok=True)
 
 
+async def recovery_proposal_rejected(
+    session: AsyncSession,
+    cycle: DeliveryCycle,
+    _ctx: Any,
+) -> GuardResult:
+    statuses = (
+        (
+            await session.execute(
+                select(RecoveryProposal.status).where(
+                    RecoveryProposal.delivery_cycle_id == cycle.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not statuses:
+        return GuardResult(ok=False, reasons=("RECOVERY_PROPOSAL_MISSING",))
+    if any(s != RecoveryProposalStatus.REJECTED for s in statuses):
+        return GuardResult(ok=False, reasons=("RECOVERY_PROPOSAL_NOT_REJECTED",))
+    pending = (
+        await session.execute(
+            select(Task.id)
+            .where(
+                Task.delivery_cycle_id == cycle.id,
+                Task.title.startswith("Recover feature") | Task.title.contains("Scout"),
+                Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]),
+            )
+            .limit(1)
+        )
+    ).first()
+    if pending is not None:
+        return GuardResult(ok=False, reasons=("SCOUT_TASKS_PENDING",))
+    return GuardResult(ok=True)
+
+
 async def recovery_proposal_persisted(
     session: AsyncSession,
     cycle: DeliveryCycle,

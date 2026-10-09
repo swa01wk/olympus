@@ -22,7 +22,7 @@ import {
   useReleaseManifest,
 } from "@/src/api/hooks/use-studio-queries";
 import { fetchAuditForTarget } from "@/src/api/resources";
-import type { InboxItem, TransitionPreview } from "@/src/api/types/core";
+import type { InboxApprovalNested, InboxItem, TransitionPreview } from "@/src/api/types/core";
 import type { DeliveryCycleType } from "@/src/control-plane/stage-lanes";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -52,6 +52,10 @@ function decisionErrorMessage(err: unknown): { message: string; stale?: boolean 
   return { message: err instanceof Error ? err.message : "Decision failed" };
 }
 
+function isArchitectureApproval(approvalType: string): boolean {
+  return approvalType === "ARCHITECTURE" || approvalType === "ARCHITECTURE_DELTA";
+}
+
 function ApprovalSubjectPreview({
   approvalType,
   subjectType,
@@ -63,8 +67,8 @@ function ApprovalSubjectPreview({
   subjectId: string;
   projectId: string;
 }) {
-  const isArch = approvalType === "ARCHITECTURE" || approvalType === "ARCHITECTURE_DELTA";
-  const isRelease = approvalType === "RELEASE" || approvalType === "DEPLOYMENT";
+  const isArch = isArchitectureApproval(approvalType);
+  const isRelease = approvalType === "RELEASE";
   const isSpec =
     subjectType.toLowerCase().includes("spec") || approvalType === "SCOPE" || approvalType.includes("SPEC");
 
@@ -102,6 +106,7 @@ function ApprovalSubjectPreview({
 export function DecisionPanel({
   stage,
   cycleType,
+  cycleState,
   inbox,
   projectId,
   nextTransitions,
@@ -109,49 +114,81 @@ export function DecisionPanel({
 }: {
   stage: string;
   cycleType: DeliveryCycleType;
+  cycleState: string;
   inbox: InboxItem[];
   projectId: string;
   nextTransitions: TransitionPreview[];
   onDecided: () => void;
 }) {
   const pending = findPendingApprovalForStage(inbox, stage, cycleType);
+  if (!pending) return null;
+  return (
+    <PendingDecision
+      key={pending.id}
+      pending={pending}
+      cycleType={cycleType}
+      cycleState={cycleState}
+      projectId={projectId}
+      nextTransitions={nextTransitions}
+      onDecided={onDecided}
+    />
+  );
+}
+
+function PendingDecision({
+  pending,
+  cycleType,
+  cycleState,
+  projectId,
+  nextTransitions,
+  onDecided,
+}: {
+  pending: InboxApprovalNested;
+  cycleType: DeliveryCycleType;
+  cycleState: string;
+  projectId: string;
+  nextTransitions: TransitionPreview[];
+  onDecided: () => void;
+}) {
   const actor = useActorMe();
   const canDecide = (actor.data?.roles ?? []).includes("APPROVER");
+  const decisionNote = useStudioDecisionNoteOptional();
 
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(() => decisionNote?.peekPendingNote(pending.id) ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
-  const panelRef = useRef<HTMLElement | null>(null);
-  const decisionNote = useStudioDecisionNoteOptional();
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
-  const approval = useApprovalDetail(pending?.id);
+  const approval = useApprovalDetail(pending.id);
   const a = approval.data;
+  const architecture = useProjectArchitecture(
+    isArchitectureApproval(pending.approval_type) ? projectId : undefined,
+  );
+  const subjectKind =
+    architecture.data?.id === pending.subject_id ? architecture.data.kind : null;
   const guards = useMemo(
-    () => (pending ? guardResultsForApprovalType(pending.approval_type, nextTransitions) : []),
-    [pending, nextTransitions],
+    () => guardResultsForApprovalType(pending.approval_type, nextTransitions),
+    [pending.approval_type, nextTransitions],
   );
 
   const audit = useQuery({
-    queryKey: ["audit", "approval", pending?.id ?? ""],
-    queryFn: () => fetchAuditForTarget("approval", pending!.id),
-    enabled: Boolean(pending?.id),
+    queryKey: ["audit", "approval", pending.id],
+    queryFn: () => fetchAuditForTarget("approval", pending.id),
   });
 
   useEffect(() => {
-    decisionNote?.registerDecisionPanel(panelRef.current);
-  });
-
-  useEffect(() => {
-    if (!pending || !decisionNote) return;
-    const draft = decisionNote.consumePendingNote(pending.id);
-    if (draft) setNote(draft);
-  }, [decisionNote, pending?.id]);
-
-  if (!pending) return null;
+    if (!decisionNote) return;
+    decisionNote.clearPendingNote(pending.id);
+    return decisionNote.registerDecisionPanel({
+      approvalId: pending.id,
+      element: panelRef.current,
+      applyNote: setNote,
+    });
+  }, [decisionNote, pending.id]);
 
   const idem = newIdempotencyKey();
-  const isRelease = pending.approval_type === "RELEASE" || pending.approval_type === "DEPLOYMENT";
+  const isRelease = pending.approval_type === "RELEASE";
   const previewApprove = isRelease
     ? previewReleaseApprove(pending.subject_id, idem)
     : previewApprovalDecision(pending.id, "APPROVED", note, idem);
@@ -265,7 +302,14 @@ export function DecisionPanel({
           Approve
         </Button>
       </div>
-      <p className="ol-body-sm ol-muted">{requestChangesHelperText(pending.approval_type)}</p>
+      <p className="ol-body-sm ol-muted">
+        {requestChangesHelperText({
+          approvalType: pending.approval_type,
+          cycleType,
+          cycleState,
+          subjectKind,
+        })}
+      </p>
       {error && (
         <p className="ol-body-sm ol-chat-err" role="alert">
           {error}

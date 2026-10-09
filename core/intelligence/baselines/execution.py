@@ -12,11 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.assurance.enums import EvidenceProducer, EvidenceResult, EvidenceType
 from core.assurance.evidence import EvidenceService
+from core.assurance.pytest_node import junit_case_node_id, legacy_node_to_path
 from core.commands.context import CommandContext
 from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.enums import ActorKind, KnowledgeClass, KnowledgeItemStatus
 from core.domain.repositories.models import Repository, RepositoryWorkspace
 from core.execution.worktrees.manager import WorktreeManager
+from core.intelligence.baselines.authored import load_authored_test, materialize
 from core.intelligence.baselines.enums import BaselineCheckKind, BaselineStatus
 from core.intelligence.baselines.models import BehavioralBaseline
 from core.product_model.models import KnowledgeItem
@@ -24,16 +26,15 @@ from core.repositories.workspace_locator import WorkspaceLocator
 from core.tools.handlers.test_runner import run_probe_in_workspace, run_pytest_in_workspace
 
 
-def _parse_junit(path: Path) -> dict[str, bool]:
+def _parse_junit(path: Path, workspace: Path) -> dict[str, bool]:
     if not path.is_file():
         return {}
     root = ET.parse(path).getroot()
     out: dict[str, bool] = {}
     for case in root.iter("testcase"):
-        nodeid = case.get("classname", "") + "::" + case.get("name", "")
+        nodeid = junit_case_node_id(workspace, case.get("classname", ""), case.get("name", ""))
         failed = case.find("failure") is not None or case.find("error") is not None
         out[nodeid] = not failed
-        out[case.get("name", "")] = not failed
     return out
 
 
@@ -95,7 +96,10 @@ class BaselineExecutionService:
         wt_path = WorkspaceLocator().resolve(canonical_ws.storage_backend, ws.logical_location)
         evidence_svc = EvidenceService()
         for baseline in rows:
-            passed, details = await self._run_check(wt_path, baseline)
+            authored = await load_authored_test(session, baseline)
+            if authored is not None:
+                materialize(wt_path, *authored)
+            passed, details = await self._run_check(wt_path, baseline, authored)
             result = EvidenceResult.PASS if passed else EvidenceResult.FAIL
             ev_type = (
                 EvidenceType.API_TEST
@@ -153,7 +157,10 @@ class BaselineExecutionService:
         return list(rows)
 
     async def _run_check(
-        self, wt_path: Path, baseline: BehavioralBaseline
+        self,
+        wt_path: Path,
+        baseline: BehavioralBaseline,
+        authored: tuple[str, str] | None = None,
     ) -> tuple[bool, dict[str, object]]:
         if baseline.check_kind == BaselineCheckKind.API_PROBE:
             method, _, path = baseline.check_ref.partition(":")
@@ -161,25 +168,25 @@ class BaselineExecutionService:
                 "method": method or "GET",
                 "path": path or baseline.check_ref,
             }
-            outcome = await run_probe_in_workspace(wt_path, probe)
-            raw_status = outcome.get("status_code")
-            status = int(raw_status) if isinstance(raw_status, int | str) else 0
-            passed = 200 <= status < 500 and bool(outcome.get("passed", status < 400))
-            return passed, {"probe": probe, "outcome": outcome}
+            outcome = await run_probe_in_workspace(wt_path, {"probes": [probe]})
+            return bool(outcome.get("passed")), {"probe": probe, "outcome": outcome}
+        if baseline.check_kind == BaselineCheckKind.AUTHORED_TEST and authored is None:
+            return False, {"error": "authored test code missing"}
+        node = authored[0] if authored else legacy_node_to_path(wt_path, baseline.check_ref)
         with tempfile.TemporaryDirectory() as tmp:
             junit = Path(tmp) / "junit.xml"
-            node = baseline.check_ref
             args = ["--junitxml=" + str(junit), node]
             result = await run_pytest_in_workspace(
                 wt_path,
                 {"runner": "pytest", "args": args},
             )
-            cases = _parse_junit(junit)
-            fallback = result.get("passed", False)
-            passed = cases.get(node, bool(fallback) if fallback is not None else False)
-            if not passed and "::" not in node:
-                passed = any(node in k and v for k, v in cases.items())
-            return bool(passed), {"pytest": result, "cases": cases}
+            cases = _parse_junit(junit, wt_path)
+            if node in cases:
+                passed = cases[node]
+            else:
+                selected = [v for k, v in cases.items() if k.startswith(node.split("::")[0])]
+                passed = bool(selected) and all(selected) and bool(result.get("passed"))
+            return passed, {"pytest": result, "cases": cases, "node": node}
 
     async def _record_failure_uncertainty(
         self,

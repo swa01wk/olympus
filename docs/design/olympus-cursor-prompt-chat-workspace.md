@@ -133,7 +133,7 @@ Goal: governed human decisions and a truthful "what's next".
   - Release approvals go through `POST /releases/{id}/approve` (it binds the decision to the manifest hash); all others through `POST /approvals/{id}/decision`.
   - Errors: 403 → "You need the APPROVER role to decide this"; hash or version conflict → "This changed after approval was requested. Request approval again." with the request action.
   - Read-only for actors without `APPROVER` (`useActorMe`).
-  - History under the panel: `GET /audit?target_type=approval&target_id=<id>` (§3 B-05).
+  - History under the panel: the approval's `decision_note`, `decided_by_actor_id` and `decided_at` from `GET /approvals` (§3 B-05).
 - `components/studio/NextStepBar.tsx`, at the bottom of the current stage: each transition from next-transitions with its guards (✓/✕ + reasons). Primary button for the forward command, enabled only when `allowed && !authorization_denied`; sends `expected_state` = current state. Secondary commands (revise_*, return_to_development, cancel) in a menu; cancel asks for confirmation.
 - After any decision or transition: invalidate inbox, next-transitions, cycle, stage lists; the spine updates from the SSE event too.
 
@@ -213,7 +213,7 @@ Acceptance: deliberately renaming one path in the manifest fails the test with t
 `tests/e2e/studio/02-brownfield.spec.ts` — DC-002 → READY_FOR_CHANGE
 1. Create a BROWNFIELD_ONBOARDING cycle on the project's repository.
 2. `start_code_index` → wait for the index → `start_spec_recovery` → wait for the recovery proposal → `start_baseline`.
-3. Work the review queue in the workspace. Record promotion decisions per `brownfield_review.yaml`; the approver decides any PROMOTION approvals. Then `start_readiness`.
+3. Work the review queue in the workspace. Record promotion decisions per `brownfield_review.yaml`; the approver records the approver-only decisions (promote as canonical, approve as project architecture, accept known gap), and the backend approves the resulting PROMOTION and ARCHITECTURE approvals in the same call. Then `start_readiness`.
 4. If readiness fails as remediable: `start_remediation`, let it complete, `reassess_readiness`. Repeat until it passes or the stage timeout is reached.
 5. `declare_ready` (no approval is requested).
 6. Assert: cycle `READY`; project `readiness_state` `READY_FOR_CHANGE`.

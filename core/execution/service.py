@@ -178,3 +178,9 @@ class ExecutionService:
                 "fail_terminal",
                 ctx,
             )
+            if task_row.title.startswith("Characterize "):
+                from core.intelligence.baselines.orchestrator import BaselineOrchestrator
+
+                await BaselineOrchestrator().schedule_execution_if_characterized(
+                    session, task_row.delivery_cycle_id, ctx
+                )

@@ -12,6 +12,7 @@ htmlcov/
 .coverage
 dist/
 build/
+!core/intelligence/code_index/build/
 
 # macOS Finder duplicate copies (e.g. "file 2.py", "README 3.md")
 * 2.*

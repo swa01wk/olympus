@@ -43,11 +43,25 @@ export function parseCycleSseBlock(block: string): DomainEventPayload | null {
   return parseSseBlock(block)?.event ?? null;
 }
 
+export function connectCycleEventStream(
+  cycleId: string,
+  handlers: CycleStreamHandlers,
+  signal: AbortSignal,
+  connectOptions: ConnectCycleStreamOptions = {},
+): Promise<void> {
+  return connectEventStream(
+    `/delivery-cycles/${cycleId}/events/stream`,
+    handlers,
+    signal,
+    connectOptions,
+  );
+}
+
 /**
  * Fetch-based SSE so Authorization headers work (native EventSource cannot).
  */
-export async function connectCycleEventStream(
-  cycleId: string,
+export async function connectEventStream(
+  path: string,
   handlers: CycleStreamHandlers,
   signal: AbortSignal,
   connectOptions: ConnectCycleStreamOptions = {},
@@ -63,7 +77,7 @@ export async function connectCycleEventStream(
 
   let res: Response;
   try {
-    res = await fetch(`${base}/delivery-cycles/${cycleId}/events/stream`, {
+    res = await fetch(`${base}${path}`, {
       headers,
       signal,
     });

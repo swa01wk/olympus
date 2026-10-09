@@ -222,6 +222,7 @@ class ObservedBehaviorService:
             tree = ast.parse(source)
         except SyntaxError:
             return rows
+        passed = _file_passed(test_results, path)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Assert):
                 continue
@@ -230,9 +231,6 @@ class ObservedBehaviorService:
                 m = re.search(r"status_code\s*==\s*(\d+)", text)
                 code = m.group(1) if m else "?"
                 desc = f"Test asserts status_code == {code} in {path}"
-                passed = None
-                if test_results:
-                    passed = test_results.get("passed")
                 rows.append(
                     await add_behavior(
                         ObservedBehaviorKind.TEST_ASSERTED,
@@ -256,6 +254,22 @@ class ObservedBehaviorService:
                             [{"type": "CODE_ENTITY", "ref": path, "lines": [node.lineno]}],
                             "AST",
                             0.9,
+                            passed=passed,
                         )
                     )
         return rows
+
+
+def _file_passed(test_results: dict[str, Any] | None, path: str) -> bool | None:
+    """Pass state of one test file from per-case results; None when it did not run."""
+    if not test_results:
+        return None
+    prefix = f"{path}::"
+    outcomes = [
+        bool(case.get("passed"))
+        for case in test_results.get("cases") or []
+        if str(case.get("nodeid", "")).startswith(prefix)
+    ]
+    if not outcomes:
+        return None
+    return all(outcomes)

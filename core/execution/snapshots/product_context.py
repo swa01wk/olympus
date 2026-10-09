@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.enums import EntityStatus, KnowledgeClass, SpecStatus
+from core.domain.executions.models import Clarification
 from core.domain.projects.models import Project
 from core.domain.tasks.models import Task
 from core.product_model.models import Capability, Feature, FeatureSpec, KnowledgeItem
@@ -28,12 +31,21 @@ async def product_context_for_task(
         project_name = project.name
 
     decisions = await session.execute(
-        select(KnowledgeItem.statement).where(
+        select(KnowledgeItem.statement, KnowledgeItem.subject_refs)
+        .where(
             KnowledgeItem.delivery_cycle_id == cycle.id,
             KnowledgeItem.knowledge_class == KnowledgeClass.DECISION,
         )
+        .order_by(KnowledgeItem.created_at)
     )
-    decision_items = [str(row[0]) for row in decisions.all() if row[0]]
+    decision_rows = [(str(stmt), refs or []) for stmt, refs in decisions.all() if stmt]
+    questions = await _clarification_questions(session, decision_rows)
+    decision_items = []
+    for statement, refs in decision_rows:
+        question = next(
+            (questions[r["ref_id"]] for r in refs if r.get("ref_id") in questions), None
+        )
+        decision_items.append(f"Q: {question}\n  A: {statement}" if question else statement)
 
     cap_count = await session.execute(
         select(Capability.id).where(
@@ -63,3 +75,24 @@ async def product_context_for_task(
         "decision_items": decision_items,
         "approved_product_summary": summary,
     }
+
+
+async def _clarification_questions(
+    session: AsyncSession,
+    decision_rows: list[tuple[str, list[dict[str, str]]]],
+) -> dict[str, str]:
+    ids: list[uuid.UUID] = []
+    for _, refs in decision_rows:
+        for ref in refs:
+            if ref.get("ref_type") != "CLARIFICATION":
+                continue
+            try:
+                ids.append(uuid.UUID(str(ref.get("ref_id"))))
+            except ValueError:
+                continue
+    if not ids:
+        return {}
+    rows = await session.execute(
+        select(Clarification.id, Clarification.question).where(Clarification.id.in_(ids))
+    )
+    return {str(cid): str(question) for cid, question in rows.all()}

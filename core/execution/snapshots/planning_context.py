@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +18,9 @@ async def planning_prompt_fields_for_task(
     *,
     agent_profile: str | None,
 ) -> dict[str, object]:
-    if not agent_profile or not agent_profile.startswith("kira."):
+    if not agent_profile or not (
+        agent_profile.startswith("kira.") or agent_profile == "atlas.architecture_delta"
+    ):
         return {}
 
     cycle = await session.get(DeliveryCycle, task.delivery_cycle_id)
@@ -49,26 +50,45 @@ async def planning_prompt_fields_for_task(
 
     if agent_profile == "atlas.architecture_delta":
         from core.intelligence.impact.engine import ImpactEngine
+        from core.intelligence.impact.models import ImpactItem
+        from core.planning.architecture.service import ArchitectureService
+        from core.product_model.changes.service import ChangeRequestService
 
         ia = await ImpactEngine().latest_complete(session, task.delivery_cycle_id)
+        cr = await ChangeRequestService().get_by_cycle(session, task.delivery_cycle_id)
+        impact_items = (
+            list(
+                (
+                    await session.execute(
+                        select(ImpactItem).where(ImpactItem.impact_assessment_id == ia.id)
+                    )
+                ).scalars()
+            )
+            if ia is not None
+            else []
+        )
         out["impact_summary"] = json.dumps(
-            {"architecture_delta_suggested": ia.architecture_delta_suggested if ia else False},
+            {
+                "architecture_delta_suggested": ia.architecture_delta_suggested if ia else False,
+                "change_request": (
+                    {"title": cr.title, "description": cr.description} if cr is not None else None
+                ),
+                "impact_items": [
+                    {
+                        "ref": row.ref,
+                        "path": row.path,
+                        "impact_kind": row.impact_kind,
+                        "contract_surface": row.contract_surface,
+                        "rationale": row.rationale,
+                    }
+                    for row in impact_items
+                ],
+            },
             indent=2,
         )
-        from core.planning.models import Architecture
-
-        arch = await session.execute(
-            select(Architecture)
-            .where(
-                Architecture.project_id == cycle.project_id,
-                Architecture.status == SpecStatus.APPROVED,
-            )
-            .order_by(Architecture.version.desc())
-            .limit(1)
-        )
-        arch_row = arch.scalar_one_or_none()
-        if arch_row is not None:
-            out["architecture_summary"] = json.dumps(arch_row.body or {}, indent=2)
+        effective = await ArchitectureService().effective(session, cycle.project_id)
+        if effective is not None:
+            out["architecture_summary"] = json.dumps(effective[1].model_dump(mode="json"), indent=2)
 
     if agent_profile == "kira.implementation_spec":
         from core.domain.enums import DeliveryCycleType
@@ -95,24 +115,12 @@ async def planning_prompt_fields_for_task(
                 ],
                 indent=2,
             )
-        from core.planning.models import Architecture, ArchitectureContract
+        from core.planning.architecture.service import ArchitectureService
 
-        arch = await session.execute(
-            select(Architecture)
-            .where(
-                Architecture.project_id == cycle.project_id,
-                Architecture.status == SpecStatus.APPROVED,
-            )
-            .limit(1)
-        )
-        arch_row = arch.scalar_one_or_none()
-        if arch_row is not None:
-            body = arch_row.body or {}
-            contract_rows = await session.execute(
-                select(ArchitectureContract).where(
-                    ArchitectureContract.architecture_id == arch_row.id
-                )
-            )
+        effective = await ArchitectureService().effective(session, cycle.project_id)
+        if effective is not None:
+            _arch_row, arch_body, contract_rows = effective
+            body = arch_body.model_dump(mode="json")
             contracts = [
                 {
                     "key": c.key,
@@ -120,16 +128,10 @@ async def planning_prompt_fields_for_task(
                     "name": c.name,
                     "definition": c.definition,
                 }
-                for c in contract_rows.scalars()
+                for c in contract_rows
             ]
-            components_raw = body.get("components")
-            components: list[Any] = components_raw if isinstance(components_raw, list) else []
-            comp_names = [
-                c.get("name") for c in components if isinstance(c, dict) and c.get("name")
-            ]
-            decisions_raw = body.get("decisions")
-            decisions: list[Any] = decisions_raw if isinstance(decisions_raw, list) else []
-            decision_ids = [d.get("id") for d in decisions if isinstance(d, dict) and d.get("id")]
+            comp_names = [c.name for c in arch_body.components]
+            decision_ids = [d.id for d in arch_body.decisions]
             contract_keys = [c["key"] for c in contracts]
             out["architecture_summary"] = json.dumps(
                 {

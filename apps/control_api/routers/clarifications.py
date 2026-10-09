@@ -36,9 +36,12 @@ class AnswerRequest(BaseModel):
 @router.get("/clarifications", response_model=list[ClarificationResponse])
 async def list_clarifications(
     status: str | None = None,
+    project_id: uuid.UUID | None = None,
     session: AsyncSession = Depends(get_db),
 ) -> list[ClarificationResponse]:
     stmt = select(Clarification)
+    if project_id is not None:
+        stmt = stmt.where(Clarification.project_id == project_id)
     if status:
         stmt = stmt.where(Clarification.status == ClarificationStatus(status))
     result = await session.execute(stmt)

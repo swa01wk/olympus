@@ -21,7 +21,7 @@ from tests.integration.control_plane.test_source_chunking_helpers import (
     chunk_b_decomposition,
 )
 
-pytestmark = [pytest.mark.integration]
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("empty_execution_queue")]
 
 
 @pytest.mark.asyncio

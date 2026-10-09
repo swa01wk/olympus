@@ -5,7 +5,8 @@ import { ProductSpecView } from "@/components/studio/ProductSpecView";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
 import { previewStudioPost } from "@/lib/command-preview";
 import {
-  promotionDecisionRequiresApprover,
+  defaultPromotionDecision,
+  promotionDecisionAllowed,
   promotionDecisionRequiresNote,
   promotionDecisionsForSubject,
 } from "@/lib/promotion-decisions";
@@ -14,27 +15,57 @@ import { recordPromotionDecision } from "@/src/api/commands";
 import { isApiError } from "@/src/api/client";
 import { invalidateStudioCycle } from "@/src/api/hooks/invalidate-cycle";
 import { useReviewQueue } from "@/src/api/hooks/use-journey-queries";
-import { useActorMe, useDeliveryCycle } from "@/src/api/hooks/use-olympus-queries";
+import { useActorMe } from "@/src/api/hooks/use-olympus-queries";
+import { queryKeys } from "@/src/api/query-keys";
 import type { ReviewQueueItem } from "@/src/api/types/journey";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 type QueueFilter = "undecided" | "all";
 
+/** Detail keys `BaselineService.review_queue` sends per subject_type. */
+const REVIEW_QUEUE_DETAIL_FIELDS: Record<string, readonly { key: string; label: string }[]> = {
+  FEATURE_SPEC: [
+    { key: "lineage_key", label: "Lineage" },
+    { key: "confidence", label: "Confidence" },
+    { key: "claimed_confidence", label: "Claimed confidence" },
+  ],
+  BASELINE: [
+    { key: "lineage_key", label: "Lineage" },
+    { key: "check_ref", label: "Check" },
+    { key: "source", label: "Source" },
+  ],
+  ARCHITECTURE: [{ key: "version", label: "Version" }],
+  IMPLEMENTATION_SPEC: [{ key: "lineage_key", label: "Lineage" }],
+  UNCERTAINTY: [{ key: "statement", label: "Statement" }],
+};
+
+function formatDetailValue(key: string, value: unknown): string {
+  if (
+    (key === "confidence" || key === "claimed_confidence") &&
+    typeof value === "number" &&
+    value >= 0 &&
+    value <= 1
+  ) {
+    return `${Math.round(value * 100)}%`;
+  }
+  if (key === "version" && typeof value === "number") return `v${value}`;
+  return String(value);
+}
+
 function ReviewQueueDetail({ item }: { item: ReviewQueueItem }) {
-  const detail = item.detail;
-  const entries = Object.entries(detail);
-  if (entries.length === 0) {
+  const fields = (REVIEW_QUEUE_DETAIL_FIELDS[item.subject_type] ?? []).filter(
+    ({ key }) => item.detail[key] != null && item.detail[key] !== "",
+  );
+  if (fields.length === 0) {
     return <p className="ol-body-sm ol-muted">No detail</p>;
   }
   return (
     <dl className="ol-appr-scope">
-      {entries.map(([key, value]) => (
+      {fields.map(({ key, label }) => (
         <div key={key}>
-          <dt className="ol-label">{key.replace(/_/g, " ")}</dt>
-          <dd className="ol-body-sm">
-            {typeof value === "object" ? JSON.stringify(value) : String(value)}
-          </dd>
+          <dt className="ol-label">{label}</dt>
+          <dd className="ol-body-sm">{formatDetailValue(key, item.detail[key])}</dd>
         </div>
       ))}
     </dl>
@@ -54,15 +85,16 @@ function ReviewQueueDecisionControls({
 }) {
   const queryClient = useQueryClient();
   const options = promotionDecisionsForSubject(item.subject_type);
-  const [selected, setSelected] = useState(options[0] ?? "");
+  const allowed = (decision: string) => promotionDecisionAllowed(decision, canApprove);
+  const [selected, setSelected] = useState(() => defaultPromotionDecision(options, canApprove));
   const [note, setNote] = useState("");
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [idem, setIdem] = useState(() => newIdempotencyKey());
 
-  const needsApprover = promotionDecisionRequiresApprover(selected);
-  const readOnly = needsApprover && !canApprove;
+  const readOnly = Boolean(selected) && !allowed(selected);
+  const someDisabled = options.some((decision) => !allowed(decision));
   const noteRequired = promotionDecisionRequiresNote(selected);
   const body = {
     subject_type: item.subject_type,
@@ -86,6 +118,7 @@ function ReviewQueueDecisionControls({
       invalidateStudioCycle(queryClient, { projectId, cycleId });
     } catch (e) {
       setError(isApiError(e) ? e.message : e instanceof Error ? e.message : "Decision failed");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.journey.reviewQueue(cycleId) });
     } finally {
       setBusy(false);
     }
@@ -104,8 +137,7 @@ function ReviewQueueDecisionControls({
       <Label>Promotion decision</Label>
       <div className="ol-ws-action-row" role="radiogroup" aria-label="Decision">
         {options.map((decision) => {
-          const approverOnly = promotionDecisionRequiresApprover(decision);
-          const disabled = approverOnly && !canApprove;
+          const disabled = !allowed(decision);
           return (
             <label key={decision} className="ol-body-sm">
               <input
@@ -125,10 +157,13 @@ function ReviewQueueDecisionControls({
           );
         })}
       </div>
-      {readOnly && (
+      {someDisabled && (
         <p className="ol-body-sm ol-muted" role="status">
           You need the APPROVER role to do this.
         </p>
+      )}
+      {item.subject_type === "BASELINE" && selected === "ACTIVATE" && (
+        <p className="ol-body-sm ol-muted">Activation needs passing evidence for this check.</p>
       )}
       <label className="ol-field">
         <span className="ol-label">
@@ -182,7 +217,6 @@ export function BrownfieldBaselineStage({
   cycleId: string;
 }) {
   const queue = useReviewQueue(cycleId);
-  const cycle = useDeliveryCycle(cycleId);
   const actor = useActorMe();
   const canApprove = (actor.data?.roles ?? []).includes("APPROVER");
   const [filter, setFilter] = useState<QueueFilter>("undecided");
@@ -217,6 +251,9 @@ export function BrownfieldBaselineStage({
             All
           </button>
         </div>
+        <p className="ol-body-sm ol-muted">
+          Promoted, confirmed, rejected and activated items leave the queue.
+        </p>
         {queue.isLoading && <p className="ol-body-sm ol-muted">Loading…</p>}
         {items.length === 0 && !queue.isLoading && (
           <EmptyState
@@ -232,10 +269,10 @@ export function BrownfieldBaselineStage({
                 <span className="ol-id">{item.subject_id}</span>
               </div>
               <ReviewQueueDetail item={item} />
-              {cycle.data && (
+              {!actor.isPending && (
                 <ReviewQueueDecisionControls
                   cycleId={cycleId}
-                  projectId={cycle.data.project_id}
+                  projectId={projectId}
                   item={item}
                   canApprove={canApprove}
                 />

@@ -69,7 +69,10 @@ _KIRA_PROMPTS: list[tuple[str, dict[str, str]]] = [
         "agents/kira/prompts/implementation_spec_repair.md",
         {
             "project_name": "p",
+            "architecture_summary": "{}",
             "root_cause_summary": "bug",
+            "root_cause_json": "{}",
+            "expected_behavior": "409",
             "impact_assessment_json": "[]",
             "expected_ac_keys": "AC-1",
             "reproduction_artifact_ref": "art",

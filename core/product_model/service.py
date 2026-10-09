@@ -251,8 +251,22 @@ class ProductModelService:
                 ProductDecompositionRow.status == DecompositionStatus.PROPOSED,
             )
         )
+        superseded_execution_ids: list[uuid.UUID] = []
         for row in decomps.scalars():
             row.status = DecompositionStatus.SUPERSEDED
+            if row.execution_id is not None:
+                superseded_execution_ids.append(row.execution_id)
+
+        if superseded_execution_ids:
+            stale_questions = await session.execute(
+                select(Clarification).where(
+                    Clarification.delivery_cycle_id == delivery_cycle_id,
+                    Clarification.execution_id.in_(superseded_execution_ids),
+                    Clarification.status == ClarificationStatus.OPEN,
+                )
+            )
+            for clarification in stale_questions.scalars():
+                clarification.status = ClarificationStatus.CANCELLED
 
         specs = await session.execute(
             select(FeatureSpec).where(

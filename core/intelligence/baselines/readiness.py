@@ -289,11 +289,14 @@ async def _metric_baseline_coverage(
         return _metric_row("baseline_coverage", 0.0, threshold, False)
     with_baseline = 0
     for spec in specs:
+        # Promotion re-points baselines to the canonical successor (same lineage key).
         bl = (
             await session.execute(
                 select(BehavioralBaseline.id)
+                .join(FeatureSpec, FeatureSpec.id == BehavioralBaseline.feature_spec_id)
                 .where(
-                    BehavioralBaseline.feature_spec_id == spec.id,
+                    FeatureSpec.project_id == cycle.project_id,
+                    FeatureSpec.lineage_key == spec.lineage_key,
                     BehavioralBaseline.status == BaselineStatus.ACTIVE,
                 )
                 .limit(1)

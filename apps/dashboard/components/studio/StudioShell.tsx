@@ -120,6 +120,7 @@ export function StudioShell({
       <DecisionPanel
         stage={selectedStage}
         cycleType={cycle.type}
+        cycleState={cycle.state}
         inbox={inboxItems}
         projectId={project?.id ?? cycle.project_id}
         nextTransitions={nextTransitions}

@@ -163,6 +163,8 @@ async def readiness_assessment_ready(
         .scalars()
         .all()
     )
+    if not active:
+        return GuardResult(ok=False, reasons=("NO_ACTIVE_BASELINES",))
     for bl in active:
         if bl.established_sha != repo.canonical_commit:
             return GuardResult(ok=False, reasons=("BASELINE_SHA_DRIFT",))

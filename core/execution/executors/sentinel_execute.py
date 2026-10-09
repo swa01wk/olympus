@@ -13,6 +13,7 @@ from core.assurance.coverage import CoverageService
 from core.assurance.enums import EvidenceProducer, EvidenceResult, EvidenceType
 from core.assurance.evidence import EvidenceService
 from core.assurance.models import VerificationObligation, VerificationPlanRow
+from core.assurance.pytest_node import legacy_node_to_path
 from core.assurance.schemas import PlannedCheck, VerificationPlan
 from core.assurance.verification_workspace import VerificationWorkspaceService
 from core.commands.context import CommandContext
@@ -148,11 +149,12 @@ async def _run_check(
 ) -> dict[str, Any]:
     if check.kind == "EXISTING_TEST" and check.test_node_id:
         junit = overlay / f"junit_{check.obligation_key}.xml"
+        node = legacy_node_to_path(wt_path, check.test_node_id)
         return await run_pytest_in_workspace(
             wt_path,
             {
                 "runner": "pytest",
-                "args": [check.test_node_id, f"--junitxml={junit}"],
+                "args": [node, f"--junitxml={junit}"],
             },
         )
     if check.kind == "AUTHORED_TEST" and check.test_code and check.test_filename:

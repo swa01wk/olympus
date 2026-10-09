@@ -14,7 +14,6 @@ from core.domain.tasks.models import Task
 from core.execution.worker import ExecutionWorker
 from core.intelligence.brownfield.enums import ObservedBehaviorKind, RecoveryProposalStatus
 from core.intelligence.brownfield.models import ObservedBehavior, RecoveryProposal
-from core.intelligence.recovered_specs.completion import BrownfieldCompletionService
 from core.product_model.models import KnowledgeItem
 from core.runtime.providers.fake_provider import FakeProvider, FakeScriptStep
 from core.scheduler.admission import AdmissionService
@@ -147,8 +146,6 @@ async def test_brownfield_recovery_validated_and_start_baseline_guard(
             )
             if not open_tasks and round_idx > 5:
                 break
-
-        await BrownfieldCompletionService().try_finalize_recovery(db_session, cycle.id, system_ctx)
 
     proposal = (
         await db_session.execute(

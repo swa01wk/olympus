@@ -191,7 +191,57 @@ class ArchitectureService:
             .where(
                 Architecture.project_id == project_id,
                 Architecture.status == SpecStatus.APPROVED,
+                # A delta body is an ArchitectureDeltaProposal, not an ArchitectureBody.
+                Architecture.kind != "DELTA",
             )
+            .order_by(Architecture.version.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def effective(
+        self, session: AsyncSession, project_id: uuid.UUID
+    ) -> tuple[Architecture, ArchitectureBody, list[ArchitectureContract]] | None:
+        """Latest approved full architecture with later approved deltas applied in order."""
+        base = await self.get_approved(session, project_id)
+        if base is None:
+            return None
+        body = self.parse_body(base)
+        contracts = {c.key: c for c in await self.get_contracts(session, base.id)}
+        deltas = (
+            await session.execute(
+                select(Architecture)
+                .where(
+                    Architecture.project_id == project_id,
+                    Architecture.status == SpecStatus.APPROVED,
+                    Architecture.kind == "DELTA",
+                    Architecture.version > base.version,
+                )
+                .order_by(Architecture.version)
+            )
+        ).scalars()
+        for delta in deltas:
+            proposal = ArchitectureDeltaProposal.model_validate(delta.body)
+            components = {c.name: c for c in body.components}
+            for comp in proposal.changed_components + proposal.added_components:
+                components[comp.name] = comp
+            decisions = {d.id: d for d in body.decisions}
+            for dec in proposal.decisions:
+                decisions[dec.id] = dec
+            body = body.model_copy(
+                update={
+                    "components": list(components.values()),
+                    "decisions": list(decisions.values()),
+                }
+            )
+            for contract in await self.get_contracts(session, delta.id):
+                contracts[contract.key] = contract
+        return base, body, list(contracts.values())
+
+    async def get_latest(self, session: AsyncSession, project_id: uuid.UUID) -> Architecture | None:
+        result = await session.execute(
+            select(Architecture)
+            .where(Architecture.project_id == project_id)
             .order_by(Architecture.version.desc())
             .limit(1)
         )

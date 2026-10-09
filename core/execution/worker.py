@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.assurance.register import register_assurance_executors
 from core.commands.context import CommandContext
 from core.domain.delivery_cycles.models import DeliveryCycle
-from core.domain.enums import TaskStatus, WorkType
+from core.domain.enums import ExecutionStatus, TaskStatus, WorkType
 from core.domain.events.append import append_domain_event
 from core.domain.executions.models import Execution, ExecutionLease, ExecutionSnapshot
 from core.domain.task_contracts.models import TaskContract
@@ -19,18 +19,35 @@ from core.domain.tasks.models import Task
 from core.domain.tasks.service import TaskService
 from core.execution.artifacts import ArtifactStore
 from core.execution.checkpoints import CheckpointService
-from core.execution.executors.base import ExecutionContext
+from core.execution.executors.base import ExecutionContext, ExecutorOutcome
 from core.execution.executors.deterministic import register_builtin_deterministic_executors
 from core.execution.executors.registry import select_executor
 from core.execution.leases.manager import LeaseManager
 from core.execution.service import ExecutionService
 from core.execution.snapshots.builder import SnapshotBuilder
 from core.execution.validation import validate_required_outputs
+from core.execution.worktrees.git import GitCliError
 from core.integration.register import register_integration_executors
 from core.intelligence.recovered_specs.register import register_brownfield_executors
+from core.observability.logging import get_logger
 from core.release.register import register_release_executors
 from core.runtime.profiles.diagnostic import DiagnosticSummary
+from core.state.machines import EXECUTION_TERMINAL
 from core.state.transition_service import TransitionService
+
+logger = get_logger(__name__)
+
+# Required artifact kinds whose executors return the artifact body as output.
+_OUTPUT_ARTIFACT_KINDS = frozenset(
+    {
+        "CHARACTERIZATION_PLAN",
+        "BASELINE_RUN",
+        "ARCHITECTURE_DELTA",
+        "WARDEN_REVIEW",
+        "VERIFICATION_PLAN",
+        "VERIFICATION_EVIDENCE",
+    }
+)
 
 register_builtin_deterministic_executors()
 register_integration_executors()
@@ -66,13 +83,55 @@ class ExecutionWorker:
         if execution is None:
             await self._leases.release(session, lease)
             return True
+        execution_id = execution.id
+        lease_id = lease.id
         try:
-            await self._run_execution(session, execution, lease, ctx)
+            # The lease claim sits outside the savepoint: if it rolled back with the
+            # failure, the execution would be re-queued and its agent re-run forever.
+            async with session.begin_nested():
+                await self._run_execution(session, execution, lease, ctx)
+        except Exception as exc:
+            logger.exception("execution_worker.execution_crashed", execution_id=str(execution_id))
+            await self._fail_crashed_execution(session, execution_id, lease_id, exc, ctx)
         finally:
-            fresh = await session.get(ExecutionLease, lease.id)
+            fresh = await session.get(ExecutionLease, lease_id)
             if fresh and fresh.state.value == "ACTIVE":
                 await self._leases.release(session, fresh)
         return True
+
+    async def _fail_crashed_execution(
+        self,
+        session: AsyncSession,
+        execution_id: uuid.UUID,
+        lease_id: uuid.UUID,
+        exc: Exception,
+        ctx: CommandContext,
+    ) -> None:
+        # The savepoint rollback also undid lease heartbeats, so the lease may read as
+        # expired; the claim's row lock still makes this worker the owner.
+        execution = await session.get(Execution, execution_id, populate_existing=True)
+        if execution is None or execution.status.value in EXECUTION_TERMINAL:
+            return
+        if execution.status == ExecutionStatus.LEASED:
+            await self._executions.transition(session, execution_id, "start", ctx)
+        task = await session.get(Task, execution.task_id, populate_existing=True)
+        if task and task.status == TaskStatus.QUEUED:
+            await self._transitions.transition(
+                session, "task", task.id, TaskStatus.QUEUED.value, "start_execution", ctx
+            )
+        execution = await self._executions.transition(
+            session,
+            execution_id,
+            "fail",
+            ctx,
+            payload={
+                "failure_class": f"WORKER_{type(exc).__name__.upper()}",
+                "failure_detail": {"message": str(exc)[:2000]},
+                "retriable": False,
+            },
+        )
+        if task:
+            await self._executions.sync_task_on_failure(session, execution, task, ctx)
 
     async def _run_execution(
         self,
@@ -143,6 +202,24 @@ class ExecutionWorker:
                 ctx,
                 lease_id=lease.id,
                 payload={"failure_class": "TIMEOUT", "retriable": True},
+            )
+            await session.refresh(execution)
+            if task:
+                await self._executions.sync_task_on_failure(session, execution, task, ctx)
+            return
+        except (OSError, RuntimeError, ValueError, GitCliError) as exc:
+            task = await session.get(Task, execution.task_id)
+            await self._executions.transition(
+                session,
+                execution.id,
+                "fail",
+                ctx,
+                lease_id=lease.id,
+                payload={
+                    "failure_class": f"EXECUTOR_{type(exc).__name__.upper()}",
+                    "failure_detail": {"message": str(exc)},
+                    "retriable": False,
+                },
             )
             await session.refresh(execution)
             if task:
@@ -549,6 +626,9 @@ class ExecutionWorker:
                 content=recovered.model_dump(mode="json"),
             )
 
+        if cycle and outcome.output:
+            await self._put_missing_output_artifacts(session, cycle, execution, contract, outcome)
+
         await self._executions.transition(session, execution.id, "validate", ctx, lease_id=lease.id)
         from typing import Literal
 
@@ -829,9 +909,6 @@ class ExecutionWorker:
                 execution.output,
                 ctx,
             )
-            await BrownfieldCompletionService().try_finalize_recovery(
-                session, execution.delivery_cycle_id, ctx
-            )
 
         await self._executions.transition(session, execution.id, "complete", ctx, lease_id=lease.id)
         from core.tools.tokens import revoke_tokens_for_execution
@@ -840,6 +917,60 @@ class ExecutionWorker:
         await self._cleanup_execution_workspace(session, execution.id, ctx, retain=False)
         await self._executions.sync_task_on_execution_complete(session, execution, ctx)
         await self._unblock_dependents(session, execution.task_id)
+
+        if contract.agent_profile in {"scout.survey", "scout.recover_feature"} and execution.output:
+            from core.intelligence.recovered_specs.completion import BrownfieldCompletionService
+
+            # Runs after the task sync so this task no longer counts as pending.
+            await BrownfieldCompletionService().try_finalize_recovery(
+                session, execution.delivery_cycle_id, ctx
+            )
+
+        if contract.agent_profile == "sentinel.characterize":
+            from core.intelligence.baselines.orchestrator import BaselineOrchestrator
+
+            await BaselineOrchestrator().schedule_execution_if_characterized(
+                session, execution.delivery_cycle_id, ctx
+            )
+
+    async def _put_missing_output_artifacts(
+        self,
+        session: AsyncSession,
+        cycle: DeliveryCycle,
+        execution: Execution,
+        contract: TaskContractBody,
+        outcome: ExecutorOutcome,
+    ) -> None:
+        """Record the executor output as each required artifact kind not already written."""
+        from sqlalchemy import select
+
+        from core.domain.artifacts.models import Artifact
+
+        if outcome.output is None:
+            return
+        for name in contract.required_outputs:
+            if not name.startswith("artifact:"):
+                continue
+            kind = name.split(":", 1)[1]
+            if kind not in _OUTPUT_ARTIFACT_KINDS:
+                continue
+            existing = await session.execute(
+                select(Artifact.id).where(
+                    Artifact.execution_id == execution.id, Artifact.kind == kind
+                )
+            )
+            if existing.first() is not None:
+                continue
+            await self._artifacts.put(
+                session,
+                project_id=cycle.project_id,
+                delivery_cycle_id=cycle.id,
+                execution_id=execution.id,
+                kind=kind,
+                schema_name=kind,
+                schema_version="1",
+                content=outcome.output,
+            )
 
     async def _cleanup_execution_workspace(
         self,

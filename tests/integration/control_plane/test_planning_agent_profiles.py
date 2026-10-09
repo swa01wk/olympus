@@ -32,7 +32,7 @@ from tests.fixtures.planning_workflow_harness import (
     supportdesk_upload_and_decompose_task,
 )
 
-pytestmark = [pytest.mark.integration]
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("empty_execution_queue")]
 
 
 @pytest.mark.asyncio

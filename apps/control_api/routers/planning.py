@@ -8,7 +8,7 @@ from core.planning.implementation_specs.service import ImplementationSpecService
 from core.planning.models import Architecture, ImplementationSpec, TaskPlanRow
 from core.planning.orchestrator import PlanningOrchestrator
 from core.planning.task_plans.service import TaskPlanService
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,16 +36,21 @@ async def propose_architecture(
 @router.get("/projects/{project_id}/architecture")
 async def get_project_architecture(
     project_id: uuid.UUID,
+    latest: bool = Query(False, description="Newest version of any status, e.g. under review"),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
-    arch = await ArchitectureService().get_approved(session, project_id)
+    svc = ArchitectureService()
+    arch = await (svc.get_latest if latest else svc.get_approved)(session, project_id)
     if arch is None:
-        raise HTTPException(status_code=404, detail="No approved architecture")
+        raise HTTPException(
+            status_code=404, detail="No architecture" if latest else "No approved architecture"
+        )
     contracts = await ArchitectureService().get_contracts(session, arch.id)
     return {
         "id": str(arch.id),
         "version": arch.version,
         "status": arch.status.value,
+        "kind": arch.kind,
         "body": arch.body,
         "contracts": [
             {"key": c.key, "kind": c.kind, "name": c.name, "definition": c.definition}
@@ -67,6 +72,7 @@ async def get_architecture(
         "id": str(arch.id),
         "version": arch.version,
         "status": arch.status.value,
+        "kind": arch.kind,
         "body": arch.body,
         "contracts": [
             {"key": c.key, "kind": c.kind, "name": c.name, "definition": c.definition}

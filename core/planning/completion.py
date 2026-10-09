@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 
 from agents.atlas.schemas import ArchitectureProposal
@@ -13,7 +14,7 @@ from core.domain.task_contracts.models import TaskContract
 from core.domain.tasks.models import Task
 from core.planning.architecture.service import ArchitectureService
 from core.planning.implementation_specs.service import ImplementationSpecService
-from core.planning.schemas import ArchitectureBody
+from core.planning.schemas import ArchitectureBody, ComponentDef
 from core.planning.task_plans.service import TaskPlanService
 
 
@@ -27,17 +28,41 @@ def _normalize_impl_spec_file_scope(patterns: list[str]) -> list[str]:
     return out
 
 
+def _component_token(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def _resolve_component(name: str, components: list[ComponentDef]) -> str:
+    """Map a code reference (``app.services.ticket_service.TicketService``) to a component name.
+
+    Matches the class or module name to a component name, then the module's package to a unique
+    component directory. Unresolvable names are returned unchanged so conformance still flags them.
+    """
+    if any(c.name == name for c in components):
+        return name
+    by_token = {_component_token(c.name): c.name for c in components}
+    parts = [p for p in re.split(r"[./\\]", name.strip().removesuffix(".py")) if p]
+    module = [p for p in parts if not p[0].isupper()]
+    for candidate in [name, *reversed(parts)]:
+        if (hit := by_token.get(_component_token(candidate))) is not None:
+            return hit
+    if len(module) < 2:
+        return name
+    package = "/".join(module[:-1])
+    in_package = [c.name for c in components if c.directory.strip("/") == package]
+    return in_package[0] if len(in_package) == 1 else name
+
+
 async def _sanitize_implementation_spec_draft(
     session: AsyncSession,
     project_id: uuid.UUID,
     draft: ImplementationSpecDraft,
 ) -> ImplementationSpecDraft:
     arch_svc = ArchitectureService()
-    arch = await arch_svc.get_approved(session, project_id)
-    if arch is None:
+    effective = await arch_svc.effective(session, project_id)
+    if effective is None:
         return draft
-    contracts = await arch_svc.get_contracts(session, arch.id)
-    body_arch = arch_svc.parse_body(arch)
+    _arch, body_arch, contracts = effective
     comp_names = {c.name for c in body_arch.components}
     contract_keys = {c.key for c in contracts}
     decision_ids = {d.id for d in body_arch.decisions}
@@ -45,10 +70,14 @@ async def _sanitize_implementation_spec_draft(
 
     body = draft.body
     apis = [api for api in body.apis if not api.contract_key or api.contract_key in contract_keys]
+    components = list(
+        dict.fromkeys(_resolve_component(c, body_arch.components) for c in body.components)
+    )
     return draft.model_copy(
         update={
             "body": body.model_copy(
                 update={
+                    "components": components,
                     "file_scope": _normalize_impl_spec_file_scope(body.file_scope),
                     "architecture_refs": [r for r in body.architecture_refs if r in known_refs],
                     "apis": apis,

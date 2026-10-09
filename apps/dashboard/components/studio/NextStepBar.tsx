@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 function isSecondaryCommand(command: string): boolean {
   return (
     command === "cancel" ||
+    command === "fail" ||
     command === "return_to_development" ||
     command.startsWith("revise_")
   );
@@ -20,16 +21,31 @@ function pickPrimaryTransition(
   transitions: TransitionPreview[],
   cycleState: string,
 ): TransitionPreview | undefined {
+  const isRunnable = (t: TransitionPreview) => t.allowed && !t.authorization_denied;
   const forward = transitions.filter(
     (t) => t.to_state !== cycleState && !isSecondaryCommand(t.command),
   );
-  return forward[0] ?? transitions.find((t) => !isSecondaryCommand(t.command));
+  // A same-state command (e.g. retry_spec_recovery) leads when nothing forward can run.
+  const stay = transitions.filter(
+    (t) => t.to_state === cycleState && !isSecondaryCommand(t.command),
+  );
+  return (
+    forward.find(isRunnable) ??
+    stay.find(isRunnable) ??
+    forward[0] ??
+    transitions.find((t) => !isSecondaryCommand(t.command))
+  );
 }
 
 function pickSecondaryTransitions(
   transitions: TransitionPreview[],
+  primary: TransitionPreview | undefined,
 ): TransitionPreview[] {
-  return transitions.filter((t) => isSecondaryCommand(t.command));
+  const others = transitions.filter((t) => t !== primary);
+  return [
+    ...others.filter((t) => !isSecondaryCommand(t.command)),
+    ...others.filter((t) => isSecondaryCommand(t.command)),
+  ];
 }
 
 export function NextStepBar({
@@ -47,7 +63,10 @@ export function NextStepBar({
     () => pickPrimaryTransition(nextTransitions, cycleState),
     [nextTransitions, cycleState],
   );
-  const secondary = useMemo(() => pickSecondaryTransitions(nextTransitions), [nextTransitions]);
+  const secondary = useMemo(
+    () => pickSecondaryTransitions(nextTransitions, primary),
+    [nextTransitions, primary],
+  );
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [armed, setArmed] = useState<string | null>(null);

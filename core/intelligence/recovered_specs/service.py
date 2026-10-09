@@ -178,8 +178,6 @@ class RecoveryService:
                     )
                 )
             for link in recovered.principal_entity_links:
-                raw_conf = link.get("confidence", 0.7)
-                link_conf = float(raw_conf) if isinstance(raw_conf, int | float | str) else 0.7
                 session.add(
                     SpecCodeLink(
                         project_id=project_id,
@@ -187,11 +185,11 @@ class RecoveryService:
                         spec_type="FEATURE_SPEC",
                         spec_id=spec.id,
                         spec_lineage_key=spec.lineage_key,
-                        code_stable_key=str(link.get("stable_key", "")),
+                        code_stable_key=link.stable_key,
                         relation=SpecCodeLinkRelation.IMPLEMENTS,
                         origin=SpecCodeLinkOrigin.DISCOVERED,
                         status=SpecCodeLinkStatus.ACTIVE,
-                        confidence=link_conf,
+                        confidence=link.confidence,
                         evidence_refs=[],
                         established_index_version_id=index_version_id,
                         last_confirmed_index_version_id=index_version_id,

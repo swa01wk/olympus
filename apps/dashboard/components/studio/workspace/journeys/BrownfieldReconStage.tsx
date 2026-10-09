@@ -27,6 +27,12 @@ export function BrownfieldReconStage({
           {repository.isLoading && !repository.data && (
             <p className="ol-body-sm ol-muted">Loading repository…</p>
           )}
+          {repository.isError && !repository.data && (
+            <p className="ol-body-sm ol-chat-err" role="alert">
+              Could not load repository:{" "}
+              {isApiError(repository.error) ? repository.error.message : "request failed"}
+            </p>
+          )}
           {repository.data && (
             <dl className="ol-appr-scope">
               <div>
@@ -44,13 +50,16 @@ export function BrownfieldReconStage({
               <div>
                 <dt className="ol-label">Canonical commit</dt>
                 <dd>
-                  <Sha
-                    value={
-                      repository.data.canonical_commit ??
-                      repository.data.registered_sha ??
-                      "—"
-                    }
-                  />
+                  {repository.data.canonical_commit ? (
+                    <Sha value={repository.data.canonical_commit} />
+                  ) : repository.data.registered_sha ? (
+                    <>
+                      <Sha value={repository.data.registered_sha} />{" "}
+                      <span className="ol-body-sm ol-muted">(registered)</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </dd>
               </div>
               <div>

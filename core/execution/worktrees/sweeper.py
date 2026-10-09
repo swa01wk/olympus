@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 
 from sqlalchemy import select
@@ -42,11 +43,16 @@ class WorktreeSweeper:
         for (loc,) in result.all():
             active_locations.add(loc)
 
+        # An execution runs in one uncommitted transaction, so its workspace row is
+        # invisible here until it finishes; only age tells a live worktree from an orphan.
+        cutoff = time.time() - settings.worktree_orphan_grace_seconds
         for wt_dir in projects.glob("*/worktrees/*"):
             if not wt_dir.is_dir():
                 continue
             rel = str(wt_dir.relative_to(worktree_root))
             if rel in active_locations:
+                continue
+            if wt_dir.stat().st_mtime > cutoff:
                 continue
             self._prune_parent_repo(rel)
             shutil.rmtree(wt_dir, ignore_errors=True)

@@ -34,6 +34,8 @@ import {
   fetchReleaseEligibility,
   fetchTaskDag,
   getApproval,
+  getArchitecture,
+  getCurrentPolicy,
   getNextTransitions,
   getProjectArchitecture,
   getRelease,
@@ -136,23 +138,36 @@ describe("C1 studio reads", () => {
     expect(firstCall(fetchMock)[0]).toContain("/delivery-cycles/cycle-1/decompositions");
   });
 
-  it("listClarifications without filter", async () => {
+  it("listClarifications scoped to project without status", async () => {
     const fetchMock = mockFetchJson();
-    await listClarifications();
-    expect(firstCall(fetchMock)[0]).toContain("/clarifications");
+    await listClarifications("proj-1");
+    expect(firstCall(fetchMock)[0]).toContain("/clarifications?project_id=proj-1");
     expect(firstCall(fetchMock)[0]).not.toContain("status=");
   });
 
   it("listClarifications with status query", async () => {
     const fetchMock = mockFetchJson();
-    await listClarifications("OPEN");
+    await listClarifications("proj-1", "OPEN");
+    expect(firstCall(fetchMock)[0]).toContain("project_id=proj-1");
     expect(firstCall(fetchMock)[0]).toContain("status=OPEN");
   });
 
   it("getProjectArchitecture", async () => {
     const fetchMock = mockFetchJson("{}");
     await getProjectArchitecture("proj-1");
-    expect(firstCall(fetchMock)[0]).toContain("/projects/proj-1/architecture");
+    expect(firstCall(fetchMock)[0]).toContain("/projects/proj-1/architecture?latest=true");
+  });
+
+  it("getProjectArchitecture returns null when none exists", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: async () => JSON.stringify({ detail: "No architecture" }),
+      }),
+    );
+    await expect(getProjectArchitecture("proj-1")).resolves.toBeNull();
   });
 
   it("listImplementationSpecs", async () => {
@@ -231,14 +246,26 @@ describe("RL1.6 defect actions client", () => {
     expect(JSON.parse(init.body as string)).toEqual({ reason: "Duplicate report" });
     expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-rj");
   });
+
+  it("getCurrentPolicy", async () => {
+    const fetchMock = mockFetchJson(
+      '{"id":"pol-1","name":"default","version":1,"content_hash":"h","content":{"bugfix":{"allow_unreproduced":false}}}',
+    );
+    const policy = await getCurrentPolicy();
+    const [url, init] = firstCall(fetchMock);
+    expect(url).toContain("/policy/current");
+    expect(init.method ?? "GET").toBe("GET");
+    expect(policy.content).toEqual({ bugfix: { allow_unreproduced: false } });
+  });
 });
 
 describe("RL1.5 architecture delta client", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("proposeArchitectureDelta", async () => {
-    const fetchMock = mockFetchJson('{"status":"scheduled"}');
-    await proposeArchitectureDelta("cycle-fc", "idem-ad");
+    const fetchMock = mockFetchJson('{"architecture_delta_task_id":"task-ad"}');
+    const res = await proposeArchitectureDelta("cycle-fc", "idem-ad");
+    expect(res.architecture_delta_task_id).toBe("task-ad");
     const [url, init] = firstCall(fetchMock);
     expect(url).toContain("/delivery-cycles/cycle-fc/architecture-delta/propose");
     expect(init.method).toBe("POST");
@@ -253,6 +280,15 @@ describe("RL1.5 architecture delta client", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ note: "No structural change needed" });
     expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-dec");
+  });
+
+  it("getArchitecture", async () => {
+    const fetchMock = mockFetchJson(
+      '{"id":"arch-d","version":3,"status":"PROPOSED","kind":"DELTA","body":{},"contracts":[]}',
+    );
+    const arch = await getArchitecture("arch-d");
+    expect(firstCall(fetchMock)[0]).toContain("/architectures/arch-d");
+    expect(arch.kind).toBe("DELTA");
   });
 });
 
@@ -349,6 +385,13 @@ describe("RL1.2 repository client", () => {
     expect(init.method).toBe("PUT");
     expect(JSON.parse(init.body as string)).toEqual({ value: "tok-abc" });
     expect((init.headers as Record<string, string>)["Idempotency-Key"]).toBe("idem-sec");
+  });
+
+  it("putSecret URL-encodes the name path segment", async () => {
+    const fetchMock = mockFetchJson('{"credential_ref":"secret:x"}');
+    await putSecret("repo a/b?#", "tok-abc", "idem-sec");
+    const [url] = firstCall(fetchMock);
+    expect(url).toMatch(/\/secrets\/repo%20a%2Fb%3F%23$/);
   });
 
   it("retryMaterialization", async () => {

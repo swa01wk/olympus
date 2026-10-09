@@ -10,7 +10,11 @@ import {
   operatorToken,
   applyTokenAndReload,
   setBrowserToken,
-  waitForFeatures,
+  decomposeLatestSourceViaApi,
+  runCycleCommandWhenAllowed,
+  settleOpenClarificationsForCycle,
+  waitForLiveDecomposeFeatures,
+  waitForProjectSources,
 } from "./helpers/studio-live-api";
 
 const prdPath = path.resolve(__dirname, "../../../../tests/fixtures/supportdesk/PRD.md");
@@ -46,14 +50,20 @@ test.describe("Studio greenfield @live", () => {
     const chatFileInput = page.locator(".ol-chat-composer input[type=file]");
     await page.getByRole("button", { name: "Attach PRD" }).click();
     await chatFileInput.setInputFiles(prdPath);
-    await expect(page.getByText(/PRD v/i)).toBeVisible({ timeout: 120_000 });
+    await expect(page.locator(".ol-chat-system").getByText(/PRD v\d+ ingested/i)).toBeVisible({
+      timeout: 120_000,
+    });
+    await waitForProjectSources(request, operator, projectId, 1, 120_000);
 
-    await page.getByRole("button", { name: "Decompose source" }).click();
-    await page.getByRole("button", { name: "Confirm send" }).click();
+    await decomposeLatestSourceViaApi(request, operator, projectId, cycleId);
+    await waitForLiveDecomposeFeatures(request, operator, projectId, cycleId, 1, 600_000);
+    await settleOpenClarificationsForCycle(request, operator, projectId, cycleId, 900_000);
+    await runCycleCommandWhenAllowed(request, operator, cycleId, "start_product_modeling", 300_000);
 
-    await waitForFeatures(request, operator, projectId, 1, 600_000);
-
-    await page.getByRole("button", { name: /Product model/i }).click();
+    await page
+      .getByRole("list", { name: "Delivery stages" })
+      .getByRole("button", { name: /^PRODUCT MODEL/ })
+      .click();
     await expect(page.getByText("Capabilities & features")).toBeVisible({ timeout: 30_000 });
 
     const featuresPanel = page.locator(".ol-ws-split").first();
@@ -101,7 +111,10 @@ test.describe("Studio greenfield @live", () => {
 
     const chatBox = page.locator(".ol-chat-composer textarea");
     await chatBox.fill("What is the next gate after product modeling?");
-    await page.getByRole("button", { name: "Send" }).click();
+    await page
+      .getByRole("region", { name: "Chat" })
+      .getByRole("button", { name: "Send", exact: true })
+      .click();
 
     await expect(page.locator(".ol-chat-assistant .ol-body, .ol-chat-assistant p").first()).toBeVisible({
       timeout: 180_000,

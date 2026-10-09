@@ -19,6 +19,35 @@ from core.product_model.models import KnowledgeItem
 from core.traceability.models import RepositoryIndexPointer
 
 
+async def _principal_aliases(
+    session: AsyncSession, index_version_id: uuid.UUID
+) -> dict[str, list[str]]:
+    """Handler and test keys -> the ROUTE that exposes / is verified by them."""
+    from sqlalchemy.orm import aliased
+
+    from core.intelligence.code_index.enums import EntityType, RelationType
+    from core.intelligence.code_index.models import CodeEntity, CodeRelation
+
+    src = aliased(CodeEntity)
+    tgt = aliased(CodeEntity)
+    rows = (
+        await session.execute(
+            select(src.stable_key, tgt.stable_key)
+            .join(CodeRelation, CodeRelation.source_entity_id == src.id)
+            .join(tgt, CodeRelation.target_entity_id == tgt.id)
+            .where(
+                CodeRelation.index_version_id == index_version_id,
+                CodeRelation.relation.in_((RelationType.EXPOSES, RelationType.VERIFIED_BY)),
+                src.type == EntityType.ROUTE,
+            )
+        )
+    ).all()
+    aliases: dict[str, list[str]] = {}
+    for route_key, target_key in rows:
+        aliases.setdefault(target_key, []).append(route_key)
+    return aliases
+
+
 class BrownfieldCompletionService:
     async def after_existing_tests(
         self,
@@ -117,18 +146,39 @@ class BrownfieldCompletionService:
         cycle = await session.get(DeliveryCycle, cycle_id)
         if cycle is None:
             return
-        survey_exec = (
-            (
+        from core.intelligence.brownfield.enums import RecoveryProposalStatus
+        from core.intelligence.brownfield.models import RecoveryProposal
+
+        prior = (
+            await session.execute(
+                select(
+                    RecoveryProposal.status,
+                    RecoveryProposal.survey_execution_id,
+                    RecoveryProposal.validation_report,
+                ).where(RecoveryProposal.delivery_cycle_id == cycle_id)
+            )
+        ).all()
+        if any(p.status != RecoveryProposalStatus.REJECTED for p in prior):
+            return
+        # A retry re-runs Scout; outputs consumed by a rejected attempt must not mix in.
+        consumed: set[str] = set()
+        for p in prior:
+            if p.survey_execution_id is not None:
+                consumed.add(str(p.survey_execution_id))
+            consumed.update((p.validation_report or {}).get("consumed_execution_ids", []))
+        survey_exec = [
+            ex
+            for ex in (
                 await session.execute(
-                    select(Execution).where(
-                        Execution.delivery_cycle_id == cycle_id,
-                        Execution.output.isnot(None),
-                    )
+                    select(Execution)
+                    .where(Execution.delivery_cycle_id == cycle_id, Execution.output.isnot(None))
+                    .order_by(Execution.created_at)
                 )
             )
             .scalars()
             .all()
-        )
+            if str(ex.id) not in consumed
+        ]
         survey_output = None
         survey_execution_id = None
         feature_outputs: list[tuple[uuid.UUID, RecoveredFeatureSpec]] = []
@@ -178,6 +228,7 @@ class BrownfieldCompletionService:
         entity_keys: set[str] = set()
         for b in behaviors:
             entity_keys.update(str(k) for k in b.subject_stable_keys)
+        principal_aliases: dict[str, list[str]] = {}
         pointer = await session.get(RepositoryIndexPointer, cycle.repository_id)
         if pointer and pointer.canonical_index_version_id:
             from core.intelligence.code_index.models import CodeEntity
@@ -190,7 +241,22 @@ class BrownfieldCompletionService:
                 )
             ).scalars()
             entity_keys.update(e.stable_key for e in index_entities)
+            principal_aliases = await _principal_aliases(
+                session, pointer.canonical_index_version_id
+            )
+        consumed_ids = [str(survey_execution_id)] + [str(fo[0]) for fo in feature_outputs]
         validator = RecoveryValidator()
+        exec_by_ref = {spec.feature_ref: exec_id for exec_id, spec in feature_outputs}
+        survey, kept_specs, pruned = validator.prune_unsupported(
+            survey,
+            [fo[1] for fo in feature_outputs],
+            behavior_ids=behavior_ids,
+            fact_ids=fact_ids,
+            fact_statements=fact_statements,
+            entity_keys=entity_keys,
+            principal_aliases=principal_aliases,
+        )
+        feature_outputs = [(exec_by_ref[s.feature_ref], s) for s in kept_specs]
         ok, errors = validator.validate_survey(
             survey,
             behavior_ids=behavior_ids,
@@ -198,6 +264,9 @@ class BrownfieldCompletionService:
             fact_statements=fact_statements,
             entity_keys=entity_keys,
         )
+        if not feature_outputs:
+            ok = False
+            errors.append("NO_SUPPORTED_FEATURES")
         feature_reports: dict[str, Any] = {}
         for spec in [fo[1] for fo in feature_outputs]:
             fok, ferr, report = validator.validate_feature_spec(
@@ -211,17 +280,20 @@ class BrownfieldCompletionService:
             ok = ok and fok
             errors.extend(ferr)
             feature_reports[spec.feature_ref] = report
+        report_body: dict[str, Any] = {
+            "errors": errors,
+            "features": feature_reports,
+            "pruned": pruned,
+            "consumed_execution_ids": consumed_ids,
+        }
         if not ok:
-            from core.intelligence.brownfield.enums import RecoveryProposalStatus
-            from core.intelligence.brownfield.models import RecoveryProposal
-
             session.add(
                 RecoveryProposal(
                     delivery_cycle_id=cycle_id,
                     survey_execution_id=survey_execution_id,
                     feature_execution_ids=[str(fo[0]) for fo in feature_outputs],
                     status=RecoveryProposalStatus.REJECTED,
-                    validation_report={"errors": errors, "features": feature_reports},
+                    validation_report=report_body,
                     context_manifest_hash="",
                 )
             )
@@ -241,7 +313,7 @@ class BrownfieldCompletionService:
             survey_execution_id=survey_execution_id,
             feature_execution_ids=[fo[0] for fo in feature_outputs],
             context_manifest_hash=manifest_hash,
-            validation_report={"errors": errors, "features": feature_reports},
+            validation_report=report_body,
             ctx=ctx,
             repository_id=repository_id,
             index_version_id=pointer.canonical_index_version_id,

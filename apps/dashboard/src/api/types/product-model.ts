@@ -76,6 +76,7 @@ export type ArchitectureView = {
   id: string;
   version: number;
   status: string;
+  kind: string;
   body: Record<string, unknown>;
   contracts: {
     key: string;

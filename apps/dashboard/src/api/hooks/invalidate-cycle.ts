@@ -36,7 +36,7 @@ export function invalidateStudioCycle(
   void queryClient.invalidateQueries({ queryKey: queryKeys.taskPlans.list(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.dag(scope.cycleId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.releaseEligibility(scope.cycleId) });
-  void queryClient.invalidateQueries({ queryKey: queryKeys.clarifications(null) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.clarificationsForProject(scope.projectId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.architecture(scope.projectId) });
   for (const featureId of scope.featureIds ?? []) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.featureSpecs(featureId) });

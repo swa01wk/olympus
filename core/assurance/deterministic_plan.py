@@ -12,6 +12,7 @@ from core.assurance.pytest_node import pytest_node_id_for_entity
 from core.assurance.schemas import PlannedCheck, VerificationPlan
 from core.integration.enums import SpecCodeLinkRelation
 from core.integration.models import IntegrationCandidate
+from core.intelligence.baselines.authored import load_authored_test
 from core.intelligence.baselines.models import BehavioralBaseline
 from core.intelligence.code_index.models import CodeEntity, CodeIndexVersion
 from core.traceability.models import SpecCodeLink
@@ -55,6 +56,18 @@ async def build_plan_from_verifies_links(
             if bl is None or not bl.check_ref:
                 if obl.required:
                     uncovered.append(obl.subject_key)
+                continue
+            authored = await load_authored_test(session, bl)
+            if authored is not None:
+                checks.append(
+                    PlannedCheck(
+                        obligation_key=obl.subject_key,
+                        kind="AUTHORED_TEST",
+                        test_filename=authored[0],
+                        test_code=authored[1],
+                        rationale="baseline characterization test",
+                    )
+                )
                 continue
             ref = bl.check_ref.strip()
             if "::" in ref:

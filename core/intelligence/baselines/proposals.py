@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from sqlalchemy import select
@@ -12,6 +13,7 @@ from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.enums import SpecKind, SpecStatus
 from core.domain.events.append import append_domain_event
 from core.domain.sequences import next_project_key
+from core.intelligence.baselines.authored import authored_test_path, store_authored_test
 from core.intelligence.baselines.enums import (
     BaselineCheckKind,
     BaselineSource,
@@ -199,8 +201,22 @@ class BaselineProposalService:
         exercised: list[str],
         sha: str,
         ctx: CommandContext,
+        test_code: str | None = None,
+        execution_id: uuid.UUID | None = None,
     ) -> BehavioralBaseline:
         key = await next_project_key(session, cycle.project_id, "baseline", prefix="BL")
+        check_artifact_id: uuid.UUID | None = None
+        if test_code is not None:
+            check_ref = authored_test_path(key, check_ref)
+            artifact = await store_authored_test(
+                session,
+                project_id=cycle.project_id,
+                delivery_cycle_id=cycle.id,
+                execution_id=execution_id,
+                test_path=check_ref,
+                test_code=test_code,
+            )
+            check_artifact_id = artifact.id
         row = BehavioralBaseline(
             project_id=cycle.project_id,
             lineage_key=key,
@@ -212,6 +228,7 @@ class BaselineProposalService:
             then=then,
             check_kind=check_kind,
             check_ref=check_ref,
+            check_artifact_id=check_artifact_id,
             feature_spec_id=spec_id,
             ac_lineage_key=ac_key,
             observed_behavior_ids=[],
@@ -250,15 +267,17 @@ def _match_test_behavior(
     ac: AcceptanceCriterion,
 ) -> ObservedBehavior | None:
     ac_text = " ".join(filter(None, [ac.statement, ac.given, ac.when, ac.then])).lower()
-    for behavior in behaviors:
+    tokens = [t for t in re.split(r"\W+", ac_text) if len(t) > 4]
+    ordered = sorted(
+        behaviors, key=lambda b: 0 if b.kind == ObservedBehaviorKind.TEST_EXECUTION else 1
+    )
+    linked = [sk.lower() for sk in stable_keys]
+    for behavior in ordered:
         ref = _behavior_check_ref(behavior).lower()
-        subjects = [str(s).lower() for s in (behavior.subject_stable_keys or [])]
-        if any(ref in sk or sk in ref for sk in stable_keys):
+        if any(ref in sk or sk in ref for sk in linked):
             return behavior
-        if any(sk in ref for sk in subjects):
+    for behavior in ordered:
+        ref = _behavior_check_ref(behavior).lower()
+        if any(token in ref for token in tokens):
             return behavior
-        if ac_text and any(token in ref for token in ac_text.split() if len(token) > 4):
-            return behavior
-    if behaviors:
-        return behaviors[0]
-    return None
+    return ordered[0] if ordered else None

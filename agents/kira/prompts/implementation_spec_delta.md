@@ -1,6 +1,6 @@
 ---
 id: kira.implementation_spec.delta
-version: 2
+version: 3
 ---
 Produce an `ImplementationSpecDraft` whose body describes **only** the delta needed for the approved FeatureSpec change.
 
@@ -46,3 +46,9 @@ Produce a complete new output. Change only what the note asks for, keep everythi
 
 ## Mode
 DELTA — constrain `file_scope` to paths that must change. Include `data_changes` with defaults when adding DB columns. Address every DIRECT contract-surface impact item in components, apis, schemas, or data_changes.
+
+## Rules (strict — output is validated)
+- `components`: only names from `valid_component_names` in the architecture JSON, never module paths or class names.
+- `apis[].contract_key`: only keys from `valid_contract_keys`.
+- `file_scope`: only paths under architecture directories; each entry must end with `/**` or `/*.py`.
+- `architecture_refs`: only values from `valid_architecture_refs`.

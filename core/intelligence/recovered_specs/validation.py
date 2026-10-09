@@ -4,7 +4,15 @@ import ast
 import re
 from typing import Any, Literal
 
-from agents.scout.schemas import Citation, RecoveredFeatureSpec, RepositorySurvey
+from agents.scout.schemas import (
+    Citation,
+    InferenceDraft,
+    PrincipalEntityLink,
+    RecoveredAcDraft,
+    RecoveredFeatureSpec,
+    RepositorySurvey,
+    UncertaintyDraft,
+)
 
 ConfidenceLevel = Literal["HIGH", "MEDIUM", "LOW"]
 
@@ -45,7 +53,7 @@ def _entity_resolves(ref: str, entity_keys: set[str]) -> bool:
             return True
     parts = normalized.split(":", 2)
     if len(parts) == 3:
-        _typ, path, qn = parts
+        typ, path, qn = parts
         tail = f"{path}:{qn}"
         for key in entity_keys:
             kn = key.replace("\\", "/")
@@ -54,7 +62,76 @@ def _entity_resolves(ref: str, entity_keys: set[str]) -> bool:
             key_parts = kn.split(":", 2)
             if len(key_parts) == 3 and key_parts[2] == qn:
                 return True
+            # FILE/MODULE refs name a file; the qualified-name part is often garbled.
+            if typ in {"FILE", "MODULE"} and len(key_parts) == 3 and key_parts[1] == path:
+                return True
+    elif "." in normalized and ":" not in normalized:
+        # Dotted ``module.Class.attr`` refs point at a member of an indexed class.
+        for key in entity_keys:
+            key_parts = key.split(":", 2)
+            if len(key_parts) != 3 or key_parts[0] != "CLASS":
+                continue
+            if normalized.startswith(f"{key_parts[2]}."):
+                return True
     return False
+
+
+def canonical_entity_keys(ref: str, entity_keys: set[str]) -> list[str]:
+    """Exact index stable keys a free-form entity ref names (empty when ambiguous or unknown).
+
+    Accepts ``TYPE:path:qualname``, ``TYPE path`` (``ROUTE POST /x``), a bare route
+    (``POST /x``), ``path:qualname`` and a dotted qualified name. Every entity sharing the
+    resolved ``path:qualname`` is returned, so a model class yields both CLASS and ORM_MODEL.
+    """
+    norm = ref.strip().replace("\\", "/")
+    if not norm:
+        return []
+    if norm in entity_keys:
+        return [norm]
+    head, _, rest = norm.partition(" ")
+    if head.isupper() and rest and ":" not in head:
+        candidate = f"{head}:{rest}"
+        if candidate in entity_keys:
+            return [candidate]
+        if f"ROUTE:{norm}" in entity_keys:
+            return [f"ROUTE:{norm}"]
+    by_tail: dict[str, list[str]] = {}
+    by_qualname: dict[str, list[str]] = {}
+    for key in entity_keys:
+        typ, _, tail = key.partition(":")
+        if not tail:
+            continue
+        by_tail.setdefault(tail, []).append(key)
+        path_qn = tail.split(":", 1)
+        if len(path_qn) == 2:
+            by_qualname.setdefault(path_qn[1], []).append(key)
+    _, _, typed_tail = norm.partition(":")
+    for tail in (norm, typed_tail):
+        if tail and tail in by_tail:
+            return sorted(by_tail[tail])
+    matches = by_qualname.get(norm, [])
+    if matches and len({m.partition(":")[2] for m in matches}) == 1:
+        return sorted(matches)
+    # ``path:short_name`` / ``path::test`` (optionally TYPE-prefixed), or a bare dotted suffix.
+    bare = norm.replace("::", ":")
+    typ, sep, rest = bare.partition(":")
+    if sep and typ.isupper() and "/" not in typ:
+        bare = rest
+    path, sep, short = bare.rpartition(":")
+    if not sep:
+        path, short = "", bare
+    if not short or " " in short:
+        return []
+    hits = [
+        key
+        for key in entity_keys
+        if len(parts := key.split(":", 2)) == 3
+        and (not path or parts[1] == path)
+        and (parts[2] == short or parts[2].endswith(f".{short}"))
+    ]
+    if hits and len({h.partition(":")[2] for h in hits}) == 1:
+        return sorted(hits)
+    return []
 
 
 def discovery_fact_aliases(fact_statements: set[str]) -> set[str]:
@@ -196,7 +273,7 @@ class RecoveryValidator:
             }
             _ = cap_confidence(ac.confidence, {k for k in kinds if k})
         for link in spec.principal_entity_links:
-            sk = str(link.get("stable_key", ""))
+            sk = link.stable_key
             if not sk:
                 continue
             if sk in behavior_ids:
@@ -212,6 +289,115 @@ class RecoveryValidator:
         persisted = cap_confidence(spec.confidence, {k for k in cited_kinds if k})
         report = {"claimed_confidence": spec.confidence, "persisted_confidence": persisted}
         return (not errors, errors, report)
+
+    def prune_unsupported(
+        self,
+        survey: RepositorySurvey,
+        feature_specs: list[RecoveredFeatureSpec],
+        *,
+        behavior_ids: set[str],
+        fact_ids: set[str],
+        fact_statements: set[str],
+        entity_keys: set[str],
+        principal_aliases: dict[str, list[str]] | None = None,
+    ) -> tuple[RepositorySurvey, list[RecoveredFeatureSpec], list[dict[str, str]]]:
+        """Drop citations that do not resolve, and claims left with none.
+
+        Every claim that survives keeps at least one valid citation; a feature whose
+        acceptance criteria are all dropped is removed. Principal entity links are rewritten
+        to exact index stable keys and joined by the survey draft's principal entities;
+        ``principal_aliases`` maps a handler or test key to the
+        route/model keys it belongs to, which are linked as well. Returns what was pruned.
+        """
+        aliases = principal_aliases or {}
+        pruned: list[dict[str, str]] = []
+
+        def resolve(ref: str) -> list[str]:
+            keys = canonical_entity_keys(ref, entity_keys)
+            return keys + [a for k in keys for a in aliases.get(k, []) if a not in keys]
+
+        def valid(citations: list[Citation], where: str) -> list[Citation]:
+            kept: list[Citation] = []
+            for cit in citations:
+                errs = self._check_citations(
+                    [cit], behavior_ids, fact_ids, fact_statements, entity_keys
+                )
+                if errs:
+                    pruned.append({"where": where, "removed": "citation", "error": errs[0]})
+                else:
+                    kept.append(cit)
+            return kept
+
+        def prune_inferences(items: list[InferenceDraft], where: str) -> list[InferenceDraft]:
+            out: list[InferenceDraft] = []
+            for inf in items:
+                cits = valid(inf.citations, f"{where}.inference")
+                if cits:
+                    out.append(inf.model_copy(update={"citations": cits}))
+                else:
+                    pruned.append(
+                        {"where": where, "removed": "inference", "error": inf.statement[:120]}
+                    )
+            return out
+
+        def prune_uncertainties(
+            items: list[UncertaintyDraft], where: str
+        ) -> list[UncertaintyDraft]:
+            return [
+                unc.model_copy(update={"citations": valid(unc.citations, f"{where}.uncertainty")})
+                for unc in items
+            ]
+
+        pruned_survey = survey.model_copy(
+            update={
+                "inferences": prune_inferences(survey.inferences, "survey"),
+                "uncertainties": prune_uncertainties(survey.uncertainties, "survey"),
+            }
+        )
+        drafts = {f.ref: f.principal_entities for f in survey.features}
+        kept_specs: list[RecoveredFeatureSpec] = []
+        for spec in feature_specs:
+            where = f"feature:{spec.feature_ref}"
+            acs: list[RecoveredAcDraft] = []
+            for ac in spec.acceptance_criteria:
+                cits = valid(ac.citations, f"{where}.ac:{ac.ref}")
+                if cits:
+                    acs.append(ac.model_copy(update={"citations": cits}))
+                else:
+                    pruned.append(
+                        {"where": where, "removed": "acceptance_criterion", "error": ac.ref}
+                    )
+            if not acs:
+                pruned.append({"where": where, "removed": "feature", "error": "NO_SUPPORTED_ACS"})
+                continue
+            links: dict[str, PrincipalEntityLink] = {}
+            for link in spec.principal_entity_links:
+                keys = resolve(link.stable_key)
+                if not keys:
+                    pruned.append(
+                        {
+                            "where": where,
+                            "removed": "entity_link",
+                            "error": f"UNKNOWN_ENTITY:{link.stable_key}",
+                        }
+                    )
+                    continue
+                for key in keys:
+                    links.setdefault(key, link.model_copy(update={"stable_key": key}))
+            for ref in drafts.get(spec.feature_ref, []):
+                for key in resolve(ref):
+                    links.setdefault(key, PrincipalEntityLink(stable_key=key, confidence=0.5))
+            kept_specs.append(
+                spec.model_copy(
+                    update={
+                        "acceptance_criteria": acs,
+                        "principal_entity_links": list(links.values()),
+                        "inferences": prune_inferences(spec.inferences, where),
+                        "uncertainties": prune_uncertainties(spec.uncertainties, where),
+                    }
+                )
+            )
+        return pruned_survey, kept_specs, pruned
 
     def _check_citations(
         self,

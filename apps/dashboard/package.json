@@ -28,17 +28,17 @@
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
-    "@types/node": "^20",
+    "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.1.2",
     "eslint": "^9",
     "@playwright/test": "^1.55.0",
     "eslint-config-next": "16.3.8",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vite": "^5.4.11",
-    "vitest": "^3.2.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
   }
 }

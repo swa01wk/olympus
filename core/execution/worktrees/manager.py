@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +34,15 @@ class WorktreeManager:
         self._locator = locator or WorkspaceLocator()
         self._git = git or GitCli()
         self._inspector = inspector or GitInspector()
+
+    def _prune_stale(self, git_dir: Path) -> None:
+        # A re-claimed execution reuses its key-based path; drop registrations
+        # whose directory is gone.
+        self._git.run(
+            GitCli.hook_disabled_config_args() + ["worktree", "prune"],
+            git_dir=git_dir,
+            check=False,
+        )
 
     async def create(
         self,
@@ -74,6 +84,7 @@ class WorktreeManager:
         await session.flush()
         wt_path = self._locator.resolve(workspace.storage_backend, logical)
         wt_path.parent.mkdir(parents=True, exist_ok=True)
+        self._prune_stale(git_dir)
         self._git.run(
             GitCli.hook_disabled_config_args()
             + ["worktree", "add", "-b", branch, str(wt_path), base_sha],
@@ -137,6 +148,7 @@ class WorktreeManager:
         await session.flush()
         wt_path = self._locator.resolve(workspace.storage_backend, logical)
         wt_path.parent.mkdir(parents=True, exist_ok=True)
+        self._prune_stale(git_dir)
         self._git.run(
             GitCli.hook_disabled_config_args() + ["worktree", "add", "--detach", str(wt_path), sha],
             git_dir=git_dir,

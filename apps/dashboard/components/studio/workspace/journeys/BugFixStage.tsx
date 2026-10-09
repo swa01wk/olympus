@@ -2,13 +2,18 @@
 
 import { Button, EmptyState, Panel, StatusBadge } from "@/components/primitives";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
-import { mayProceedUnreproduced, mayRejectDefect } from "@/lib/defect-reproduction";
+import {
+  mayProceedUnreproduced,
+  mayRejectDefect,
+  policyAllowsUnreproduced,
+} from "@/lib/defect-reproduction";
 import { previewStudioPost } from "@/lib/command-preview";
 import { newIdempotencyKey } from "@/lib/utils";
 import { proceedUnreproduced, rejectDefect } from "@/src/api/commands";
 import { isApiError } from "@/src/api/client";
 import { invalidateStudioCycle } from "@/src/api/hooks/invalidate-cycle";
 import {
+  useCurrentPolicy,
   useDefectDetail,
   useDefectReproductions,
   useDefectRootCause,
@@ -123,17 +128,21 @@ function ProceedUnreproducedAction({
   cycleId: string;
 }) {
   const actor = useActorMe();
+  const policy = useCurrentPolicy();
   const queryClient = useQueryClient();
   const canProceed = (actor.data?.roles ?? []).includes("APPROVER");
+  const policyOff = policy.data ? !policyAllowsUnreproduced(policy.data.content) : false;
+  const enabled = canProceed && !policyOff && !policy.isLoading;
   const [reason, setReason] = useState("");
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const [idem, setIdem] = useState(() => newIdempotencyKey());
 
   const path = `/defects/${defectId}/proceed-unreproduced`;
   const body = { reason: reason.trim() };
-  const canSubmit = canProceed && reason.trim().length > 0;
+  const canSubmit = enabled && reason.trim().length > 0;
 
   const confirm = async () => {
     setBusy(true);
@@ -142,6 +151,7 @@ function ProceedUnreproducedAction({
       await proceedUnreproduced(defectId, reason.trim(), idem);
       setReason("");
       setArmed(false);
+      setDone(true);
       invalidateStudioCycle(queryClient, { projectId, cycleId });
     } catch (e) {
       setError(isApiError(e) ? e.message : e instanceof Error ? e.message : "Request failed");
@@ -149,6 +159,17 @@ function ProceedUnreproducedAction({
       setBusy(false);
     }
   };
+
+  if (done) {
+    return (
+      <div className="ol-ws-action">
+        <p className="ol-label">Proceed unreproduced</p>
+        <p className="ol-body-sm ol-chat-ok" role="status">
+          Proceeding without reproduction (approval recorded).
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="ol-ws-action">
@@ -158,12 +179,18 @@ function ProceedUnreproducedAction({
           You need the APPROVER role to do this.
         </p>
       )}
+      {policyOff && (
+        <p className="ol-body-sm ol-muted" role="status">
+          Policy bugfix.allow_unreproduced is off, so this defect can&apos;t proceed without a
+          reproduction.
+        </p>
+      )}
       <label className="ol-field">
         <span className="ol-label">Reason (required)</span>
         <textarea
           rows={3}
           value={reason}
-          disabled={!canProceed || busy}
+          disabled={!enabled || busy}
           onChange={(ev) => setReason(ev.target.value)}
         />
       </label>
@@ -221,9 +248,7 @@ export function BugFixStage({
   const rca = useDefectRootCause(stage === "ROOT_CAUSE" ? activeId : undefined);
 
   const showProceed =
-    stage === "REPRODUCTION" &&
-    detail.data &&
-    mayProceedUnreproduced(detail.data.status, repros.data ?? []);
+    stage === "REPRODUCTION" && detail.data && mayProceedUnreproduced(detail.data.status);
 
   const showReject =
     REJECT_STAGES.has(stage) &&

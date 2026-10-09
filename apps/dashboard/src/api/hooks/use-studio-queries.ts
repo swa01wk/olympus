@@ -7,6 +7,7 @@ import {
   fetchReleaseEligibility,
   fetchTaskDag,
   getApproval,
+  getArchitecture,
   getProjectArchitecture,
   getRelease,
   getReleaseManifest,
@@ -18,6 +19,7 @@ import {
   getFeatureSpec,
   listFeatureSpecs,
   listFeatures,
+  listApprovals,
   listImplementationSpecs,
   listSources,
   listTaskPlans,
@@ -97,10 +99,11 @@ export function useDecompositions(cycleId: string | undefined) {
   });
 }
 
-export function useClarifications(status?: string) {
+export function useClarifications(projectId: string | undefined, status?: string) {
   return useQuery({
-    queryKey: queryKeys.clarifications(status ?? null),
-    queryFn: () => listClarifications(status),
+    queryKey: queryKeys.clarifications(projectId ?? "", status ?? null),
+    queryFn: () => listClarifications(projectId!, status),
+    enabled: Boolean(projectId),
   });
 }
 
@@ -109,6 +112,21 @@ export function useProjectArchitecture(projectId: string | undefined) {
     queryKey: queryKeys.architecture(projectId ?? ""),
     queryFn: () => getProjectArchitecture(projectId!),
     enabled: Boolean(projectId),
+  });
+}
+
+export function useArchitectureDetail(architectureId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.architectureDetail(architectureId ?? ""),
+    queryFn: () => getArchitecture(architectureId!),
+    enabled: Boolean(architectureId),
+  });
+}
+
+export function useApprovals(status?: string) {
+  return useQuery({
+    queryKey: queryKeys.approvals.list(status),
+    queryFn: () => listApprovals(status ? { status } : undefined),
   });
 }
 

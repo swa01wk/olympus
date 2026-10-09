@@ -106,6 +106,7 @@ def build_guard_registry() -> GuardRegistry:
     from core.intelligence.recovered_specs.guards import (
         canonical_repository_index_ready,
         recovery_proposal_persisted,
+        recovery_proposal_rejected,
     )
     from core.planning.guards import (
         architecture_approved,
@@ -126,6 +127,7 @@ def build_guard_registry() -> GuardRegistry:
     registry = GuardRegistry()
     registry.register("canonical_repository_index_ready", canonical_repository_index_ready)
     registry.register("recovery_proposal_persisted", recovery_proposal_persisted)
+    registry.register("recovery_proposal_rejected", recovery_proposal_rejected)
     registry.register("baseline_review_complete", baseline_review_complete)
     registry.register("readiness_failed_remediable", readiness_failed_remediable)
     registry.register("remediation_integrated_and_reindexed", remediation_integrated_and_reindexed)

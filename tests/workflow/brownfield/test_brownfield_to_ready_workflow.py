@@ -6,7 +6,11 @@ import os
 
 import pytest
 from core.commands.context import CommandContext
+from core.domain.enums import TaskStatus
+from core.domain.executions.models import Execution
+from core.domain.tasks.models import Task
 from core.runtime.providers.fake_provider import FakeProvider
+from sqlalchemy import select
 from tests.fixtures.brownfield_phase12_harness import (
     advance_to_ready_for_change,
     ensure_human_approver,
@@ -34,6 +38,29 @@ async def test_brownfield_onboarding_to_ready_for_change(
     fake = FakeProvider()
     cycle, _sha = await recovery_to_baseline(db_session, system_ctx, fake=fake)
     await run_baseline_stage_workers(db_session, system_ctx, cycle.id, fake=fake)
+    baseline_tasks = (
+        (
+            await db_session.execute(
+                select(Task).where(
+                    Task.delivery_cycle_id == cycle.id,
+                    Task.title.startswith("Characterize")
+                    | Task.title.startswith("Execute baseline checks"),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {t.title.split()[0] for t in baseline_tasks} == {"Characterize", "Execute"}
+    failures = (
+        await db_session.execute(
+            select(Execution.failure_class, Execution.failure_detail).where(
+                Execution.task_id.in_([t.id for t in baseline_tasks]),
+                Execution.failure_class.isnot(None),
+            )
+        )
+    ).all()
+    assert all(t.status == TaskStatus.COMPLETED for t in baseline_tasks), failures
 
     _human, human_ctx = await ensure_human_approver(db_session)
     final = await advance_to_ready_for_change(db_session, cycle.id, system_ctx, human_ctx)

@@ -58,27 +58,24 @@ export function stagesForType(type: DeliveryCycleType): readonly string[] {
   return STAGES_BY_CYCLE_TYPE[type] ?? [];
 }
 
-export function findChangesRequestedApprovalForStage(
-  approvals: {
-    id: string;
+/** The stage's newest approval (by created_at), only when that one is CHANGES_REQUESTED. */
+export function findChangesRequestedApprovalForStage<
+  T extends {
     approval_type: string;
     status: string;
     delivery_cycle_id: string | null;
-    subject_type: string;
-    subject_id: string;
-  }[],
-  stage: string,
-  cycleType: DeliveryCycleType,
-  cycleId: string,
-): (typeof approvals)[number] | null {
+    created_at: string;
+  },
+>(approvals: T[], stage: string, cycleType: DeliveryCycleType, cycleId: string): T | null {
+  let latest: T | null = null;
   for (const a of approvals) {
-    if (a.status !== "CHANGES_REQUESTED") continue;
     if (a.delivery_cycle_id !== cycleId) continue;
-    if (approvalStage(a.approval_type, cycleType) === stage) {
-      return a;
+    if (approvalStage(a.approval_type, cycleType) !== stage) continue;
+    if (!latest || Date.parse(a.created_at) > Date.parse(latest.created_at)) {
+      latest = a;
     }
   }
-  return null;
+  return latest?.status === "CHANGES_REQUESTED" ? latest : null;
 }
 
 export function findPendingApprovalForStage(

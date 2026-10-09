@@ -15,6 +15,7 @@ from core.domain.enums import TaskContractStatus, TaskOrigin, WorkType
 from core.domain.task_contracts.models import TaskContract
 from core.domain.task_contracts.schemas import TaskContractBody, VersionedRef
 from core.domain.tasks.service import TaskService
+from core.product_model.defects.reproduction_context import build_reproduction_snapshot
 from core.product_model.defects.service import DefectService
 from core.review.context import RevisionContext
 from core.review.contract_snapshot import attach_snapshot
@@ -74,7 +75,7 @@ class BugFixOrchestrator:
         cycle = await session.get(DeliveryCycle, cycle_id)
         if defect is None or cycle is None:
             raise ValueError("defect/cycle missing")
-        triage = defect.triage or {}
+        snapshot = await build_reproduction_snapshot(session, cycle, defect)
         task = await TaskService().create_task(
             session,
             cycle_id,
@@ -98,10 +99,7 @@ class BugFixOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body={
-                **body.model_dump(mode="json"),
-                "_snapshot": {"triage_json": json.dumps(triage, indent=2)},
-            },
+            body={**body.model_dump(mode="json"), "_snapshot": snapshot},
             content_hash=sha256_hex(f"sentinel-reproduce-{cycle_id}"),
             compiled_by="bug_fix",
         )
@@ -175,6 +173,7 @@ class BugFixOrchestrator:
         cycle = await session.get(DeliveryCycle, cycle_id)
         if defect is None or cycle is None:
             raise ValueError("defect/cycle missing")
+        citations = await DefectService().approved_ac_citations(session, defect)
         task = await TaskService().create_task(
             session,
             cycle_id,
@@ -203,6 +202,7 @@ class BugFixOrchestrator:
                 "_snapshot": {
                     "defect_description": defect.description,
                     "triage_json": json.dumps(defect.triage or {}, indent=2),
+                    "approved_acs_json": json.dumps(citations, indent=2),
                 },
             },
             content_hash=sha256_hex(f"expected-behavior-{cycle_id}"),
@@ -354,7 +354,11 @@ class BugFixOrchestrator:
         from core.domain.enums import SpecStatus
         from core.intelligence.impact.engine import ImpactEngine
         from core.policy.policy_service import get_cached_policy_content
-        from core.product_model.defects.models import Reproduction, RootCauseAnalysis
+        from core.product_model.defects.models import (
+            ExpectedBehaviorResolution,
+            Reproduction,
+            RootCauseAnalysis,
+        )
         from core.product_model.models import FeatureSpec
 
         defect = await DefectService().get_by_cycle(session, cycle_id)
@@ -415,6 +419,14 @@ class BugFixOrchestrator:
                 .limit(1)
             )
         ).scalar_one_or_none()
+        expected = (
+            await session.execute(
+                select(ExpectedBehaviorResolution)
+                .where(ExpectedBehaviorResolution.defect_id == defect.id)
+                .order_by(ExpectedBehaviorResolution.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
         ia = await ImpactEngine().latest_complete(session, cycle_id)
         policy = get_cached_policy_content().get("bugfix", {})
         task = await TaskService().create_task(
@@ -441,6 +453,17 @@ class BugFixOrchestrator:
             "implementation_spec_mode": "REPAIR",
             "project_name": str(cycle.objective),
             "root_cause_summary": rca.explanation if rca else "",
+            "root_cause_json": json.dumps(
+                {
+                    "faulty_stable_keys": rca.faulty_stable_keys,
+                    "fix_outline": rca.fix_outline,
+                    "regression_risks": rca.regression_risks,
+                }
+                if rca
+                else {},
+                indent=2,
+            ),
+            "expected_behavior": expected.statement if expected else "",
             "impact_assessment_json": json.dumps({"id": str(ia.id) if ia else None}, indent=2),
             "expected_ac_keys": ",".join(defect.expected_ac_ids or []),
             "reproduction_artifact_ref": str(pre.artifact_id) if pre else "",

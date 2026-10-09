@@ -118,6 +118,18 @@ async def brownfield_spec_recovery_stage(
     await BrownfieldOrchestrator().run_spec_recovery_stage(session, cycle.id, ctx)
 
 
+async def brownfield_spec_recovery_retry(
+    session: AsyncSession,
+    cycle: DeliveryCycle,
+    ctx: Any,
+) -> None:
+    if cycle.type != DeliveryCycleType.BROWNFIELD_ONBOARDING:
+        return
+    from core.intelligence.recovered_specs.orchestrator import BrownfieldOrchestrator
+
+    await BrownfieldOrchestrator().schedule_survey(session, cycle.id, ctx)
+
+
 async def feature_change_schedule_interpret(
     session: AsyncSession,
     cycle: DeliveryCycle,
@@ -242,6 +254,7 @@ EFFECT_HANDLERS: dict[str, Any] = {
     "create_integration_candidate": create_integration_candidate,
     "brownfield_code_index_stage": brownfield_code_index_stage,
     "brownfield_spec_recovery_stage": brownfield_spec_recovery_stage,
+    "brownfield_spec_recovery_retry": brownfield_spec_recovery_retry,
     "brownfield_baseline_stage": brownfield_baseline_stage,
     "brownfield_readiness_assess": brownfield_readiness_assess,
     "brownfield_remediation_draft": brownfield_remediation_draft,

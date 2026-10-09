@@ -123,6 +123,10 @@ class OlympusSettings(BaseSettings):
         default=120.0,
         validation_alias="OLYMPUS_EXECUTION_LEASE_TTL_SECONDS",
     )
+    worktree_orphan_grace_seconds: float = Field(
+        default=3600.0,
+        validation_alias="OLYMPUS_WORKTREE_ORPHAN_GRACE_SECONDS",
+    )
     execution_heartbeat_interval_seconds: float = Field(
         default=30.0,
         validation_alias="OLYMPUS_EXECUTION_HEARTBEAT_INTERVAL_SECONDS",

@@ -7,6 +7,7 @@ import signal
 import uuid
 from typing import Any
 
+import core.domain.registry  # noqa: F401  # every mapper must be registered before first use
 from core.commands.context import CommandContext
 from core.config.settings import get_settings
 from core.db.engine import create_async_engine_from_settings, dispose_engine
@@ -50,8 +51,12 @@ async def run_tick(
     worker: ExecutionWorker,
     ctx: CommandContext,
 ) -> None:
-    async with session_factory() as session, session.begin():
-        ran = await worker.run_once(session, ctx)
+    try:
+        async with session_factory() as session, session.begin():
+            ran = await worker.run_once(session, ctx)
+    except Exception:
+        logger.exception("execution_worker.tick_failed")
+        return
     logger.info("execution_worker.tick", ran=ran)
 
 

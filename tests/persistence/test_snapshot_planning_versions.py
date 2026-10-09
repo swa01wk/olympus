@@ -50,13 +50,18 @@ async def test_snapshot_includes_architecture_and_implementation_spec_versions(
     await TaskPlanService().accept(db_session, plan_row.id, system_ctx)
 
     from core.domain.tasks.models import Task as TaskModel
-    from sqlalchemy import select
+    from core.domain.tasks.models import TaskDependency
+    from sqlalchemy import exists, select
 
+    # Dependent tasks resolve their base from completed dependency commits, which this test lacks.
     tasks = await db_session.execute(
-        select(TaskModel).where(
+        select(TaskModel)
+        .where(
             TaskModel.delivery_cycle_id == cycle.id,
             TaskModel.origin == TaskOrigin.IMPLEMENTATION_PLAN,
+            ~exists().where(TaskDependency.task_id == TaskModel.id),
         )
+        .order_by(TaskModel.key)
     )
     task = tasks.scalars().first()
     assert task is not None and task.current_contract_id is not None

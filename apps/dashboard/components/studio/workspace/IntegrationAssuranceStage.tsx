@@ -9,23 +9,44 @@ import { remediateFinding, waiveFinding } from "@/src/api/commands";
 import { invalidateStudioCycle } from "@/src/api/hooks/invalidate-cycle";
 import { useCycleFindings } from "@/src/api/hooks/use-journey-queries";
 import { useIcAssurance } from "@/src/api/hooks/use-drill-queries";
-import { useIntegrationCandidates } from "@/src/api/hooks/use-olympus-queries";
+import { useInbox, useIntegrationCandidates } from "@/src/api/hooks/use-olympus-queries";
+import type { InboxItem } from "@/src/api/types/core";
 import type { CycleFinding } from "@/src/api/types/journey";
 import { useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+
+function pendingWaiverFindingIds(inbox: InboxItem[]): Set<string> {
+  const ids = new Set<string>();
+  for (const row of inbox) {
+    const a = row.approval;
+    if (
+      a &&
+      a.approval_type === "FINDING_WAIVER" &&
+      a.subject_type === "FINDING" &&
+      a.status === "PENDING"
+    ) {
+      ids.add(a.subject_id);
+    }
+  }
+  return ids;
+}
 
 function FindingRow({
   finding,
   cycleId,
   projectId,
+  waiverPending,
 }: {
   finding: CycleFinding;
   cycleId: string;
   projectId: string;
+  waiverPending: boolean;
 }) {
   const queryClient = useQueryClient();
   const { file, line } = findingCodeLocation(finding);
   const blockingLabel = findingBlockingLabel(finding);
   const open = finding.status === "OPEN";
+  const actionable = open && !waiverPending;
 
   const invalidate = () => {
     invalidateStudioCycle(queryClient, { projectId, cycleId });
@@ -51,7 +72,12 @@ function FindingRow({
           {blockingLabel}
         </p>
       )}
-      {open && (
+      {open && waiverPending && (
+        <p className="ol-body-sm ol-muted" role="status">
+          Waiver pending approval
+        </p>
+      )}
+      {actionable && (
         <div className="ol-ws-action-row">
           <StudioMutationAction
             label="Waive"
@@ -61,14 +87,16 @@ function FindingRow({
               invalidate();
             }}
           />
-          <StudioMutationAction
-            label="Remediate"
-            path={`/findings/${finding.id}/remediate`}
-            onRun={async (idem) => {
-              await remediateFinding(finding.id, idem);
-              invalidate();
-            }}
-          />
+          {finding.blocking && (
+            <StudioMutationAction
+              label="Remediate"
+              path={`/findings/${finding.id}/remediate`}
+              onRun={async (idem) => {
+                await remediateFinding(finding.id, idem);
+                invalidate();
+              }}
+            />
+          )}
         </div>
       )}
     </li>
@@ -89,6 +117,8 @@ export function IntegrationAssuranceStage({
   const ic = ics.data?.[ics.data.length - 1];
   const assurance = useIcAssurance(ic?.id);
   const findings = useCycleFindings(cycleId);
+  const inbox = useInbox({ cycleId });
+  const pendingWaivers = useMemo(() => pendingWaiverFindingIds(inbox.data ?? []), [inbox.data]);
 
   const data = assurance.data ?? {};
   const obligations = (data.obligations as Record<string, unknown>[]) ?? [];
@@ -130,6 +160,7 @@ export function IntegrationAssuranceStage({
               finding={finding}
               cycleId={cycleId}
               projectId={projectId}
+              waiverPending={pendingWaivers.has(finding.id)}
             />
           ))}
         </ul>

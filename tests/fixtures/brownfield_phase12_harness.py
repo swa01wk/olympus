@@ -30,7 +30,6 @@ from core.intelligence.baselines.readiness import ReadinessService
 from core.intelligence.baselines.service import BaselineService
 from core.intelligence.brownfield.enums import ObservedBehaviorKind, RecoveryProposalStatus
 from core.intelligence.brownfield.models import ObservedBehavior, RecoveryProposal
-from core.intelligence.recovered_specs.completion import BrownfieldCompletionService
 from core.intelligence.recovered_specs.promotion import PromotionService
 from core.planning.models import ImplementationSpec
 from core.product_model.models import FeatureSpec, KnowledgeItem
@@ -134,10 +133,6 @@ async def live_drain_spec_recovery(
                 ).scalar_one_or_none()
                 if validated is not None:
                     return
-        async with session_factory() as session, session.begin():
-            actor = await ensure_system_actor(session)
-            fin_ctx = CommandContext(actor=actor, correlation_id="bf-live-rec-finalize")
-            await BrownfieldCompletionService().try_finalize_recovery(session, cycle_id, fin_ctx)
     async with session_factory() as session:
         validated = (
             await session.execute(
@@ -298,7 +293,6 @@ async def recovery_to_baseline(
             if not live and not open_tasks and round_idx > 5:
                 break
 
-        await BrownfieldCompletionService().try_finalize_recovery(session, cycle.id, system_ctx)
         if live:
             for _ in range(20):
                 proposal_peek = (
@@ -314,9 +308,6 @@ async def recovery_to_baseline(
                 await admission.admit_batch(session, 10, system_ctx)
                 for _ in range(10):
                     await worker.run_once(session, system_ctx)
-                await BrownfieldCompletionService().try_finalize_recovery(
-                    session, cycle.id, system_ctx
-                )
 
     proposal = (
         await session.execute(
@@ -348,12 +339,16 @@ async def run_baseline_stage_workers(
     cycle_id: uuid.UUID,
     *,
     fake: FakeProvider | None = None,
+    plans: list[CharacterizationPlan] | None = None,
 ) -> None:
-    """Drain characterization + deterministic baseline execution tasks."""
+    """Drain characterization + deterministic baseline execution tasks.
+
+    ``plans`` answer the first characterize calls in order; the rest get empty plans.
+    """
     provider = fake or FakeProvider()
     empty_plan = CharacterizationPlan(checks=[], skipped=[]).model_dump(mode="json")
-    if not provider._script:
-        provider.set_script([FakeScriptStep(structured=empty_plan) for _ in range(8)])
+    scripted = [FakeScriptStep(structured=p.model_dump(mode="json")) for p in plans or []]
+    provider.set_script(scripted + [FakeScriptStep(structured=empty_plan) for _ in range(8)])
     await run_worker_loop(session, system_ctx, cycle_id, fake=provider, max_rounds=80)
 
 

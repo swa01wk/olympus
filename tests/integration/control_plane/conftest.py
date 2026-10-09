@@ -9,9 +9,11 @@ from core.config.settings import OlympusSettings
 from core.db.engine import dispose_engine
 from core.domain.actors.models import Actor, ApiToken
 from core.domain.actors.tokens import generate_token, hash_token
-from core.domain.enums import ActorKind, ActorRole
+from core.domain.enums import ActorKind, ActorRole, ExecutionStatus
+from core.domain.executions.models import Execution
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -86,6 +88,19 @@ async def api_client(
         headers={"Authorization": f"Bearer {operator_token}"},
     ) as client:
         yield client
+
+
+@pytest.fixture
+async def empty_execution_queue(async_engine) -> None:
+    """The DB is session-scoped and ExecutionWorker claims the oldest QUEUED execution,
+    so work queued but never run by an earlier test would be picked up first."""
+    factory = async_sessionmaker(bind=async_engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(Execution)
+            .where(Execution.status == ExecutionStatus.QUEUED)
+            .values(status=ExecutionStatus.CANCELLED)
+        )
 
 
 @pytest.fixture

@@ -15,6 +15,7 @@ from core.product_model.source_chunking import (
     chunk_markdown_by_headings,
     merge_product_decompositions,
 )
+from core.product_model.validation import sanitize_proposal_requirement_refs, validate_proposal
 from core.runtime.agent_profiles import AgentProfile, all_profiles, register_profile
 from core.runtime.context import GraphDeps
 from core.runtime.contracts import ContextItem, ModelRequest
@@ -25,6 +26,18 @@ class _KiraState(TypedDict, total=False):
     source_text: str
     output: dict[str, Any]
     model_call_ids: list[str]
+
+
+_REPAIR_SOURCE_OMITTED = (
+    "(Source omitted for this repair: it was split into chunks. Keep all content from your "
+    "previous output.)"
+)
+
+
+def _validation_repair_note(errors: list[str]) -> str:
+    return "Your output failed product model validation. Fix exactly these errors:\n" + "\n".join(
+        f"- {e}" for e in errors
+    )
 
 
 def _revision_vars(snap: dict[str, Any]) -> dict[str, str]:
@@ -58,23 +71,23 @@ def _build_kira_graph(deps: GraphDeps) -> Any:
         }
         max_chars = get_settings().product_source_decompose_max_chars
         chunks = chunk_markdown_by_headings(source_text, max_chars)
-        merged: ProductDecomposition | None = None
-        for chunk in chunks:
-            chunk_system = render_prompt(
+
+        async def call(chunk: str, revision: dict[str, str], purpose: str) -> ProductDecomposition:
+            system = render_prompt(
                 template,
                 {
                     "project_name": project_name,
                     "source_text": chunk,
                     "decision_context": decision_context,
                     "approved_product_summary": approved_summary,
-                    **_revision_vars(deps.request.snapshot or {}),
+                    **revision,
                 },
             )
             result = await deps.model_router.invoke(
                 ModelRequest(
-                    purpose="kira.decompose",
+                    purpose=purpose,
                     alias=deps.profile.model_alias,
-                    system_instructions=chunk_system,
+                    system_instructions=system,
                     context=[
                         ContextItem(kind="TEXT", content=chunk, provenance="SOURCE_DOCUMENT"),
                     ],
@@ -86,9 +99,28 @@ def _build_kira_graph(deps: GraphDeps) -> Any:
             deps.model_call_ids.append(result.model_call_id)
             if result.parsed_output is None:
                 raise ValueError("Kira decompose did not return structured output")
-            parsed = ProductDecomposition.model_validate(result.parsed_output.model_dump())
+            return ProductDecomposition.model_validate(result.parsed_output.model_dump())
+
+        merged: ProductDecomposition | None = None
+        for chunk in chunks:
+            parsed = await call(
+                chunk, _revision_vars(deps.request.snapshot or {}), "kira.decompose"
+            )
             merged = parsed if merged is None else merge_product_decompositions(merged, parsed)
         assert merged is not None
+
+        # One repair pass; output that is still invalid is rejected downstream by the same validator.
+        errors = validate_proposal(sanitize_proposal_requirement_refs(merged))
+        if errors:
+            repair_source = source_text if len(chunks) == 1 else _REPAIR_SOURCE_OMITTED
+            merged = await call(
+                repair_source,
+                {
+                    "revision_feedback": _validation_repair_note(errors),
+                    "previous_output_json": merged.model_dump_json(),
+                },
+                "kira.decompose.repair",
+            )
         return {"output": merged.model_dump(mode="json"), "source_text": source_text}
 
     graph = StateGraph(_KiraState)
@@ -181,7 +213,10 @@ def register_kira_profile() -> None:
             elif mode == "REPAIR":
                 keys = {
                     "project_name": "project_name",
+                    "architecture_summary": "architecture_summary",
                     "root_cause_summary": "root_cause_summary",
+                    "root_cause_json": "root_cause_json",
+                    "expected_behavior": "expected_behavior",
                     "impact_assessment_json": "impact_assessment_json",
                     "expected_ac_keys": "expected_ac_keys",
                     "reproduction_artifact_ref": "reproduction_artifact_ref",
@@ -302,6 +337,7 @@ def register_kira_profile() -> None:
                 template_keys={
                     "defect_description": "defect_description",
                     "triage_json": "triage_json",
+                    "approved_acs_json": "approved_acs_json",
                 },
             )
 

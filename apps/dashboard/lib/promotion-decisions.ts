@@ -46,3 +46,15 @@ export function promotionDecisionRequiresApprover(decision: string): boolean {
 export function promotionDecisionRequiresNote(decision: string): boolean {
   return NOTE_REQUIRED_DECISIONS.has(decision);
 }
+
+export function promotionDecisionAllowed(decision: string, canApprove: boolean): boolean {
+  return canApprove || !promotionDecisionRequiresApprover(decision);
+}
+
+/** First option the actor may use; the first option when none are usable. */
+export function defaultPromotionDecision(
+  options: readonly string[],
+  canApprove: boolean,
+): string {
+  return options.find((d) => promotionDecisionAllowed(d, canApprove)) ?? options[0] ?? "";
+}

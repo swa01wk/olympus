@@ -39,6 +39,14 @@ function systemNotesFromLines(prev: ChatLine[]): ChatLine[] {
   return prev.filter((l) => l.kind === "system-note");
 }
 
+/** The API stores the user turn on POST, so only an assistant turn means the reply landed. */
+function hasReply(turns: OrchestratorTurn[], executionId: string, assistantsAtSend: number) {
+  const assistants = turns.filter((t) => t.role === "assistant");
+  return (
+    assistants.some((t) => t.execution_id === executionId) || assistants.length > assistantsAtSend
+  );
+}
+
 export function useOrchestratorChat(
   projectId: string | undefined,
   cycleId: string | undefined,
@@ -53,7 +61,7 @@ export function useOrchestratorChat(
   const pendingRef = useRef<Set<string>>(new Set());
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartedRef = useRef<number>(0);
-  const turnCountAtSendRef = useRef<number>(0);
+  const assistantCountAtSendRef = useRef<number>(0);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -114,8 +122,7 @@ export function useOrchestratorChat(
           }
           try {
             const session = await fetchOrchestratorSession(sessionId);
-            const visible = visibleSessionTurns(session.turns);
-            if (visible.length > turnCountAtSendRef.current) {
+            if (hasReply(session.turns, executionId, assistantCountAtSendRef.current)) {
               await resolvePending(executionId);
             }
           } catch {
@@ -204,7 +211,9 @@ export function useOrchestratorChat(
 
       try {
         const sessionBefore = await fetchOrchestratorSession(sid);
-        turnCountAtSendRef.current = visibleSessionTurns(sessionBefore.turns).length;
+        assistantCountAtSendRef.current = sessionBefore.turns.filter(
+          (t) => t.role === "assistant",
+        ).length;
 
         const { execution_id: executionId } = await postOrchestratorTurn(sid, text, focus ?? null);
         pendingRef.current.add(executionId);

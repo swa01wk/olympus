@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from core.commands.bus import CommandBus
 from core.commands.context import CommandContext
@@ -46,6 +47,10 @@ class ApprovalResponse(BaseModel):
     subject_version: int
     subject_hash: str
     status: str
+    created_at: datetime
+    decided_by_actor_id: uuid.UUID | None
+    decided_at: datetime | None
+    decision_note: str | None
 
 
 def _resp(a: Approval) -> ApprovalResponse:
@@ -60,6 +65,10 @@ def _resp(a: Approval) -> ApprovalResponse:
         subject_version=a.subject_version,
         subject_hash=a.subject_hash,
         status=a.status.value,
+        created_at=a.created_at,
+        decided_by_actor_id=a.decided_by_actor_id,
+        decided_at=a.decided_at,
+        decision_note=a.decision_note,
     )
 
 

@@ -12,6 +12,7 @@ from core.domain.canonical_json import sha256_hex
 from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.enums import ProjectReadiness
 from core.domain.events.append import append_domain_event
+from core.domain.exceptions import DomainError
 from core.domain.projects.models import Project
 from core.domain.sequences import next_project_key
 from core.intelligence.baselines.enums import BaselineStatus, ReadinessResult
@@ -112,7 +113,10 @@ class BaselineSetService:
             .all()
         )
         if not baselines:
-            raise ValueError("no ACTIVE baselines at assessment SHA")
+            raise DomainError(
+                code="NO_ACTIVE_BASELINES",
+                message="No ACTIVE baselines at the readiness assessment SHA",
+            )
         key = await next_project_key(session, cycle.project_id, "baseline_set", prefix="B")
         content = {
             "baseline_ids": [str(b.id) for b in baselines],

@@ -90,7 +90,6 @@ async def test_finalize_ignores_wrong_sha_evidence(
         producer=EvidenceProducer.SENTINEL,
         ctx=system_ctx,
     )
-    fin_ctx = await human_finalize_ctx(db_session)
     sentinel = (
         await db_session.execute(
             select(Gate).where(
@@ -99,9 +98,10 @@ async def test_finalize_ignores_wrong_sha_evidence(
             )
         )
     ).scalar_one()
-    finalized = await GateFinalizerService().finalize(db_session, sentinel.id, fin_ctx)
-    assert finalized.status == GateStatus.FAIL
-    assert any(str(r).startswith("EVIDENCE_SHA_MISMATCH") for r in (finalized.reasons or []))
+    repo = await db_session.get(Repository, fixture.repository.id)
+    decision = await GateFinalizerService()._compute_decision(db_session, sentinel, ic, repo)
+    assert decision.status == GateStatus.FAIL
+    assert any(str(r).startswith("EVIDENCE_SHA_MISMATCH") for r in decision.reasons)
 
 
 @pytest.mark.asyncio

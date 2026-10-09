@@ -1,4 +1,4 @@
-import { apiRequest } from "@/src/api/client";
+import { apiRequest, isApiError } from "@/src/api/client";
 export {
   answerClarification,
   createDeliveryCycle,
@@ -6,6 +6,7 @@ export {
   postOrchestratorTurn,
 } from "@/src/api/commands";
 import type {
+  ApprovalView,
   ControlPlaneSummaryView,
   CycleOverviewView,
   DeliveryCycle,
@@ -314,6 +315,16 @@ export function fetchFeatureLineage(featureId: string) {
   );
 }
 
+export function getCurrentPolicy() {
+  return apiRequest<{
+    id: string;
+    name: string;
+    version: number;
+    content_hash: string;
+    content: Record<string, unknown>;
+  }>("/policy/current");
+}
+
 export function fetchConnectors() {
   return apiRequest<{ name: string; ok: boolean; message: string }[]>("/connectors");
 }
@@ -382,13 +393,24 @@ export function listDecompositions(cycleId: string) {
   );
 }
 
-export function listClarifications(status?: string) {
-  const q = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest<Clarification[]>(`/clarifications${q}`);
+export function listClarifications(projectId: string, status?: string) {
+  const params = new URLSearchParams({ project_id: projectId });
+  if (status) params.set("status", status);
+  return apiRequest<Clarification[]>(`/clarifications?${params.toString()}`);
 }
 
-export function getProjectArchitecture(projectId: string) {
-  return apiRequest<ArchitectureView>(`/projects/${projectId}/architecture`);
+/** Newest architecture version of any status (the one under review), or null if none exists. */
+export async function getProjectArchitecture(projectId: string): Promise<ArchitectureView | null> {
+  try {
+    return await apiRequest<ArchitectureView>(`/projects/${projectId}/architecture?latest=true`);
+  } catch (err) {
+    if (isApiError(err) && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export function getArchitecture(architectureId: string) {
+  return apiRequest<ArchitectureView>(`/architectures/${architectureId}`);
 }
 
 export function listImplementationSpecs(featureSpecId: string) {
@@ -406,36 +428,12 @@ export function getApproval(approvalId: string) {
 }
 
 export function fetchApproval(approvalId: string) {
-  return apiRequest<{
-    id: string;
-    key: string;
-    approval_type: string;
-    subject_type: string;
-    subject_id: string;
-    subject_version: number;
-    subject_hash: string;
-    status: string;
-    project_id: string;
-    delivery_cycle_id: string | null;
-  }>(`/approvals/${approvalId}`);
+  return apiRequest<ApprovalView>(`/approvals/${approvalId}`);
 }
 
 export function listApprovals(params?: { status?: string }) {
   const q = params?.status ? `?status=${encodeURIComponent(params.status)}` : "";
-  return apiRequest<
-    {
-      id: string;
-      key: string;
-      approval_type: string;
-      subject_type: string;
-      subject_id: string;
-      subject_version: number;
-      subject_hash: string;
-      status: string;
-      project_id: string;
-      delivery_cycle_id: string | null;
-    }[]
-  >(`/approvals${q}`);
+  return apiRequest<ApprovalView[]>(`/approvals${q}`);
 }
 
 export function fetchClarification(clarificationId: string) {

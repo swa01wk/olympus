@@ -1,0 +1,30 @@
+# Studio @live Playwright stack on macOS/Linux dev hosts.
+# Use LocalSandboxRunner inside workers (OLYMPUS_ENV=local) instead of bwrap (journey).
+#
+#   docker compose -f docker-compose.yml -f deploy/compose.demo.yaml \
+#     -f deploy/compose.studio-live.yaml --profile demo up -d --build \
+#     postgres control-api scheduler-worker execution-worker
+#
+services:
+  control-api:
+    env_file:
+      - .env
+    environment:
+      OLYMPUS_ENV: local
+      LLM_LIVE_TESTS: "1"
+
+  scheduler-worker:
+    env_file:
+      - .env
+    environment:
+      OLYMPUS_ENV: local
+      LLM_LIVE_TESTS: "1"
+      OLYMPUS_SANDBOX: ""
+
+  execution-worker:
+    env_file:
+      - .env
+    environment:
+      OLYMPUS_ENV: local
+      LLM_LIVE_TESTS: "1"
+      OLYMPUS_SANDBOX: ""

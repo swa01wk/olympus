@@ -1,12 +1,9 @@
 "use client";
 
 import { Panel } from "@/components/primitives";
-import {
-  parseChangesRequestedAudit,
-  type AuditRow,
-} from "@/lib/changes-requested-audit";
 import { findChangesRequestedApprovalForStage } from "@/lib/studio-spine";
-import { fetchAuditForTarget, listApprovals } from "@/src/api/resources";
+import { useActorMe } from "@/src/api/hooks/use-olympus-queries";
+import { listApprovals } from "@/src/api/resources";
 import type { DeliveryCycleType } from "@/src/control-plane/stage-lanes";
 import { useQuery } from "@tanstack/react-query";
 
@@ -20,9 +17,10 @@ export function ChangesRequestedFeedback({
   stage: string;
 }) {
   const approvals = useQuery({
-    queryKey: ["approvals", "CHANGES_REQUESTED", cycleId],
-    queryFn: () => listApprovals({ status: "CHANGES_REQUESTED" }),
+    queryKey: ["approvals", "list"],
+    queryFn: () => listApprovals(),
   });
+  const actor = useActorMe();
 
   const match = findChangesRequestedApprovalForStage(
     approvals.data ?? [],
@@ -31,15 +29,11 @@ export function ChangesRequestedFeedback({
     cycleId,
   );
 
-  const audit = useQuery({
-    queryKey: ["audit", "approval", match?.id ?? ""],
-    queryFn: () => fetchAuditForTarget("approval", match!.id),
-    enabled: Boolean(match?.id),
-  });
-
   if (!match) return null;
 
-  const parsed = parseChangesRequestedAudit((audit.data ?? []) as AuditRow[]);
+  const authorId = match.decided_by_actor_id;
+  const authorName =
+    authorId && actor.data?.actor_id === authorId ? actor.data.name : null;
 
   return (
     <Panel
@@ -50,14 +44,23 @@ export function ChangesRequestedFeedback({
       <p className="ol-body-sm ol-muted">
         Subject <span className="ol-id">{match.subject_id}</span>
       </p>
-      {parsed?.note ? (
-        <blockquote className="ol-body-sm">{parsed.note}</blockquote>
+      {match.decision_note?.trim() ? (
+        <blockquote className="ol-body-sm">{match.decision_note}</blockquote>
       ) : (
-        <p className="ol-body-sm ol-muted">No note found in audit for this approval.</p>
+        <p className="ol-body-sm ol-muted">No note was recorded for this approval.</p>
       )}
-      {parsed && (
+      {(match.decided_at || authorId) && (
         <p className="ol-body-sm ol-muted">
-          Recorded {parsed.occurredAt} · actor <span className="ol-id">{parsed.actorId}</span>
+          {match.decided_at && <>Requested {match.decided_at}</>}
+          {match.decided_at && authorId && " · "}
+          {authorId &&
+            (authorName ? (
+              <>by {authorName}</>
+            ) : (
+              <>
+                by <span className="ol-id">{authorId}</span>
+              </>
+            ))}
         </p>
       )}
     </Panel>

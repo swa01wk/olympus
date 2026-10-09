@@ -16,6 +16,8 @@ COPY migrations migrations
 COPY config config
 
 RUN uv sync --frozen --no-dev
+# Executors run pytest in target repos (existing tests, baselines, reproduction); keep in step with uv.lock.
+RUN uv pip install --python /app/.venv/bin/python "pytest==9.1.1" "pytest-asyncio==1.4.0"
 
 ENV PATH="/app/.venv/bin:$PATH"
 # bubblewrap may require user namespaces; document seccomp unconfined for Docker.

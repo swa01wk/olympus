@@ -12,8 +12,11 @@ export function StudioRevisionBridge({
 }) {
   const focus = useStudioFocus();
   const focusRef = useRef(focus);
-  focusRef.current = focus;
   const { onDomainEvent } = useStudioRevision();
+
+  useEffect(() => {
+    focusRef.current = focus;
+  }, [focus]);
 
   useEffect(() => {
     onRegister((event) => {

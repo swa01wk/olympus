@@ -50,12 +50,17 @@ export const queryKeys = {
   featureSpecs: (featureId: string) => ["product", "feature-specs", featureId] as const,
   featureSpecDetail: (specId: string) => ["product", "feature-spec", specId] as const,
   decompositions: (cycleId: string) => ["product", "decompositions", cycleId] as const,
-  clarifications: (status?: string | null) => ["clarifications", status ?? null] as const,
+  clarificationsForProject: (projectId: string) => ["clarifications", projectId] as const,
+  clarifications: (projectId: string, status?: string | null) =>
+    ["clarifications", projectId, status ?? null] as const,
   architecture: (projectId: string) => ["planning", "architecture", projectId] as const,
+  architectureDetail: (architectureId: string) =>
+    ["planning", "architecture-detail", architectureId] as const,
   implementationSpecs: (featureSpecId: string) =>
     ["planning", "implementation-specs", featureSpecId] as const,
   approvals: {
     detail: (approvalId: string) => ["approvals", approvalId] as const,
+    list: (status?: string | null) => ["approvals", "list", status ?? null] as const,
   },
   release: {
     detail: (releaseId: string) => ["releases", "detail", releaseId] as const,
@@ -91,6 +96,7 @@ export const queryKeys = {
   releases: (projectId: string) => ["releases", projectId] as const,
   lineage: (featureId: string) => ["lineage", "feature", featureId] as const,
   connectors: ["connectors"] as const,
+  policyCurrent: ["policy", "current"] as const,
   codeEntities: (repositoryId: string, prefix: string) =>
     ["code-entities", repositoryId, prefix] as const,
   auditVerify: (projectId: string) => ["audit", "verify", projectId] as const,

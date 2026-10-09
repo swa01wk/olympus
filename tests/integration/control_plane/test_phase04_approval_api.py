@@ -65,5 +65,11 @@ async def test_action_approval_created_and_decidable_via_api(
         json={"decision": "APPROVED", "note": "ok for test"},
     )
     assert decided.status_code == 200
-    assert decided.json()["status"] == "APPROVED"
+    body = decided.json()
+    assert body["status"] == "APPROVED"
+    assert body["decision_note"] == "ok for test"
+    assert body["decided_by_actor_id"]
+    assert body["decided_at"]
+    fetched = await api_client.get(f"/approvals/{approval_id}")
+    assert fetched.json()["decision_note"] == "ok for test"
     assert exec_token  # used by gateway path above

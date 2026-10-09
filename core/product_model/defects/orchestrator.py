@@ -168,6 +168,8 @@ class BugFixOrchestrator:
         session: AsyncSession,
         cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         defect = await DefectService().get_by_cycle(session, cycle_id)
         cycle = await session.get(DeliveryCycle, cycle_id)
@@ -192,19 +194,19 @@ class BugFixOrchestrator:
             model_alias="product_decomposition",
             required_outputs=["artifact:EXPECTED_BEHAVIOR"],
         )
+        snapshot = {
+            "defect_description": defect.description,
+            "triage_json": json.dumps(defect.triage or {}, indent=2),
+            "approved_acs_json": json.dumps(citations, indent=2),
+        }
         contract = TaskContract(
             task_id=task.id,
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body={
-                **body.model_dump(mode="json"),
-                "_snapshot": {
-                    "defect_description": defect.description,
-                    "triage_json": json.dumps(defect.triage or {}, indent=2),
-                    "approved_acs_json": json.dumps(citations, indent=2),
-                },
-            },
+            body=attach_snapshot(
+                body.model_dump(mode="json"), snapshot=snapshot, revision=revision
+            ),
             content_hash=sha256_hex(f"expected-behavior-{cycle_id}"),
             compiled_by="bug_fix",
         )
@@ -212,7 +214,7 @@ class BugFixOrchestrator:
         await session.flush()
         task.current_contract_id = contract.id
         await TaskService().mark_ready(session, task.id, ctx)
-        return {"expected_behavior_task_id": str(task.id)}
+        return {"expected_behavior_task_id": str(task.id), "task_id": str(task.id)}
 
     async def schedule_root_cause(
         self,
@@ -493,6 +495,8 @@ class BugFixOrchestrator:
         session: AsyncSession,
         cycle_id: uuid.UUID,
         ctx: CommandContext,
+        *,
+        revision: RevisionContext | None = None,
     ) -> dict[str, str]:
         cycle = await session.get(DeliveryCycle, cycle_id)
         if cycle is None:
@@ -520,7 +524,7 @@ class BugFixOrchestrator:
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body=body.model_dump(mode="json"),
+            body=attach_snapshot(body.model_dump(mode="json"), revision=revision),
             content_hash=sha256_hex(f"repair-task-plan-{cycle_id}"),
             compiled_by="bug_fix",
         )

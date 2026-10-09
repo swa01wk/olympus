@@ -1,7 +1,9 @@
 ---
 id: kira.implementation_spec.delta
-version: 3
+version: 4
 ---
+{{ decision_context }}
+
 Produce an `ImplementationSpecDraft` whose body describes **only** the delta needed for the approved FeatureSpec change.
 
 ## Project

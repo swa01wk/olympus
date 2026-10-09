@@ -14,7 +14,6 @@ from core.execution.worker import ExecutionWorker
 from core.intelligence.impact.models import ImpactAssessment, ImpactItem
 from core.planning.implementation_specs.service import ImplementationSpecService
 from core.planning.models import ImplementationSpec, TaskPlanRow
-from core.planning.task_plans.service import TaskPlanService
 from core.product_model.changes.models import ChangeRequest
 from core.scheduler.admission import AdmissionService
 from sqlalchemy import select
@@ -153,8 +152,11 @@ async def accept_task_plan_if_proposed(
             .limit(1)
         )
     ).scalar_one_or_none()
+    del ctx
     if plan is not None:
-        await TaskPlanService().accept(session, plan.id, ctx)
+        from tests.fixtures.approvals import approve_task_plan
+
+        await approve_task_plan(session, plan.id, note="journey task plan accept")
 
 
 async def wait_for_task_plan_proposed(
@@ -183,7 +185,62 @@ async def wait_for_task_plan_proposed(
             ).scalar_one_or_none()
             return task is not None
 
-    await wait_for(_ok, timeout=600.0, interval=3.0)
+    try:
+        await wait_for(_ok, timeout=600.0, interval=3.0)
+    except TimeoutError as exc:
+        raise TimeoutError(
+            f"no task plan for cycle {cycle_id}: {await cycle_diagnostics(factory, cycle_id)}"
+        ) from exc
+
+
+async def cycle_diagnostics(
+    factory: async_sessionmaker[AsyncSession],
+    cycle_id: uuid.UUID,
+) -> str:
+    from core.domain.executions.models import Execution
+
+    async with factory() as session:
+        cycle = await session.get(DeliveryCycle, cycle_id)
+        assert cycle is not None
+        tasks = list(
+            (
+                await session.execute(
+                    select(Task).where(Task.delivery_cycle_id == cycle_id).order_by(Task.key)
+                )
+            ).scalars()
+        )
+        last_exec = {
+            e.task_id: e
+            for e in (
+                await session.execute(
+                    select(Execution)
+                    .where(Execution.delivery_cycle_id == cycle_id)
+                    .order_by(Execution.created_at)
+                )
+            ).scalars()
+        }
+        impls = list(
+            (
+                await session.execute(
+                    select(ImplementationSpec).where(
+                        ImplementationSpec.project_id == cycle.project_id
+                    )
+                )
+            ).scalars()
+        )
+    task_lines = []
+    for t in tasks:
+        line = f"{t.key} {t.title!r} {t.status.value}"
+        if t.blocked_reason:
+            line += f" blocked_reason={t.blocked_reason!r}"
+        e = last_exec.get(t.id)
+        if e is not None:
+            line += f" exec={e.agent_profile}:{e.status.value}"
+            if e.failure_class:
+                line += f" failure={e.failure_class}: {e.failure_detail}"
+        task_lines.append(line)
+    impl_lines = [f"{i.lineage_key} v{i.version} {i.kind} {i.status.value}" for i in impls]
+    return f"state={cycle.state}; tasks=[{'; '.join(task_lines)}]; impl_specs={impl_lines}"
 
 
 async def wait_for_task_plan_accepted(

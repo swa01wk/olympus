@@ -148,7 +148,9 @@ async def test_greenfield_supportdesk_end_to_end(
             execution_id=None,
             ctx=ctx,
         )
-        await TaskPlanService().accept(session, plan_row.id, ctx)
+        from tests.fixtures.approvals import approve_task_plan
+
+        await approve_task_plan(session, plan_row.id)
 
     async with AsyncClient(
         transport=transport,

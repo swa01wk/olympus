@@ -503,6 +503,23 @@ test.describe.serial("Studio RL1 phase acceptance @live", () => {
 
     await reachBugFixStage(page, request, operator, projectId, cycleId, "start_reproduction", "REPRODUCTION", 600_000);
     await reachBugFixStage(page, request, operator, projectId, cycleId, "resolve_expected_behavior", "EXPECTED_BEHAVIOR", 1_200_000);
+
+    // UNDERSPECIFIED / CONFLICTING, or a resolution that contradicts an ACTIVE baseline, waits for a
+    // human EXPECTED_BEHAVIOR approval before root cause can start.
+    const gate = await poll(`ROOT_CAUSE, start_root_cause or EXPECTED_BEHAVIOR approval (cycle ${cycleId})`, 1_200_000, async () => {
+      await failIfTaskFailed(request, operator, cycleId);
+      const state = await cycleState(request, operator, cycleId);
+      if (BUG_FIX_ORDER.indexOf(state) >= BUG_FIX_ORDER.indexOf("ROOT_CAUSE")) return "reached" as const;
+      if (await pendingApproval(request, operator, cycleId, "EXPECTED_BEHAVIOR")) return "approval" as const;
+      const t = (await transitions(request, operator, cycleId)).find((x) => x.command === "start_root_cause");
+      return t?.allowed && !t.authorization_denied ? ("allowed" as const) : false;
+    });
+    if (gate === "approval") {
+      await applyTokenAndReload(page, approver);
+      await openStudio(page, projectId, cycleId, "EXPECTED_BEHAVIOR");
+      await approveInDecisionPanel(page, "EXPECTED_BEHAVIOR");
+      await applyTokenAndReload(page, operator);
+    }
     await reachBugFixStage(page, request, operator, projectId, cycleId, "start_root_cause", "ROOT_CAUSE", 900_000);
 
     await poll("repair IMPLEMENTATION_SPEC approval pending", 1_200_000, async () => {

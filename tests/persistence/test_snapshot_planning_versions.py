@@ -6,6 +6,7 @@ from core.domain.enums import DeliveryCycleType, TaskOrigin
 from core.domain.executions.models import Execution
 from core.execution.snapshots.builder import SnapshotBuilder
 from core.planning.task_plans.service import TaskPlanService
+from tests.fixtures.approvals import approve_task_plan
 from tests.fixtures.planning_workflow_harness import (
     build_task_plan_for_cycle,
     provision_greenfield_repository,
@@ -47,7 +48,7 @@ async def test_snapshot_includes_architecture_and_implementation_spec_versions(
         execution_id=None,
         ctx=system_ctx,
     )
-    await TaskPlanService().accept(db_session, plan_row.id, system_ctx)
+    await approve_task_plan(db_session, plan_row.id)
 
     from core.domain.tasks.models import Task as TaskModel
     from core.domain.tasks.models import TaskDependency

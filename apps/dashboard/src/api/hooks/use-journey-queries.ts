@@ -8,6 +8,8 @@ import {
   getCycleSpecDelta,
   getDefect,
   getDefectRootCause,
+  getExpectedBehaviorReview,
+  listProjectBaselines,
   getReadinessAssessment,
   getRecoveryProposals,
   getRepository,
@@ -85,6 +87,23 @@ export function useDefectRootCause(defectId: string | undefined) {
     queryFn: () => getDefectRootCause(defectId!),
     enabled: Boolean(defectId),
     retry: false,
+  });
+}
+
+export function useExpectedBehaviorReview(resolutionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.journey.expectedBehaviorReview(resolutionId ?? ""),
+    queryFn: () => getExpectedBehaviorReview(resolutionId!),
+    enabled: Boolean(resolutionId),
+    retry: false,
+  });
+}
+
+export function useProjectBaselines(projectId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.journey.baselines(projectId ?? ""),
+    queryFn: () => listProjectBaselines(projectId!),
+    enabled: Boolean(projectId),
   });
 }
 

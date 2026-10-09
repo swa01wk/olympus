@@ -2,6 +2,7 @@
 
 import { EvidenceMatrix } from "@/components/assurance/EvidenceMatrix";
 import { Panel, Sha, StatusBadge } from "@/components/primitives";
+import { ProvisionalBaselinesPanel } from "@/components/studio/ProvisionalBaselinesPanel";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
 import { StudioMutationAction } from "@/components/studio/workspace/StudioMutationAction";
 import { findingBlockingLabel, findingCodeLocation } from "@/lib/finding-location";
@@ -165,6 +166,7 @@ export function IntegrationAssuranceStage({
           ))}
         </ul>
       </Panel>
+      <ProvisionalBaselinesPanel projectId={projectId} />
     </StageWorkspaceFrame>
   );
 }

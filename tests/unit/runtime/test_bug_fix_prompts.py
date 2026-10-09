@@ -30,9 +30,31 @@ pytestmark = pytest.mark.unit
             },
             ["SPEC-FEAT-0002/AC-1", "Never cite a feature or spec key on its own"],
         ),
+        (
+            "agents/forge/prompts/implement.md",
+            {
+                "objective": "Add ticket priority",
+                "allowed_scope": "app/api/**",
+                "constraints": "",
+                "decision_context": "",
+                "protected_tests": "- tests/test_ticket_service.py::test_create_defaults_open",
+            },
+            [
+                "test_create_defaults_open",
+                "do not delete, rename or move it",
+            ],
+        ),
     ],
 )
 def test_bug_fix_prompt_renders(path: str, values: dict[str, str], expected: list[str]) -> None:
-    rendered = render_prompt(load_prompt(path), {**values, "revision_feedback": ""})
+    rendered = render_prompt(
+        load_prompt(path),
+        {
+            **values,
+            "revision_feedback": "",
+            "previous_output_json": "",
+            "decision_context": "",
+        },
+    )
     for text in expected:
         assert text in rendered

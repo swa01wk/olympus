@@ -1,7 +1,9 @@
 ---
 id: kira.implementation_spec_repair
-version: 3
+version: 4
 ---
+{{ decision_context }}
+
 Draft a minimal REPAIR ImplementationSpec for a defect fix.
 
 Project: {{project_name}}

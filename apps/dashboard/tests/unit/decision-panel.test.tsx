@@ -13,6 +13,19 @@ vi.mock("@/src/api/hooks/use-olympus-queries", () => ({
   useActorMe: () => ({ data: { roles: ["OPERATOR"] } }),
 }));
 
+vi.mock("@/src/api/hooks/use-journey-queries", () => ({
+  useExpectedBehaviorReview: () => ({ isLoading: false, data: null, isError: true }),
+}));
+
+vi.mock("@/src/api/resources", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/src/api/resources")>();
+  return {
+    ...orig,
+    fetchAuditForTarget: vi.fn().mockResolvedValue([]),
+    fetchTaskPlan: vi.fn().mockResolvedValue({ id: "plan-1", status: "PROPOSED", body: { tasks: [] } }),
+  };
+});
+
 vi.mock("@/src/api/hooks/use-studio-queries", () => ({
   useApprovalDetail: () => ({
     data: {
@@ -32,14 +45,6 @@ vi.mock("@/src/api/hooks/use-studio-queries", () => ({
   useProjectArchitecture: () => ({ data: projectArchitecture }),
   useReleaseManifest: () => ({ data: null }),
 }));
-
-vi.mock("@/src/api/resources", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("@/src/api/resources")>();
-  return {
-    ...orig,
-    fetchAuditForTarget: vi.fn().mockResolvedValue([]),
-  };
-});
 
 const inbox: InboxItem[] = [
   {
@@ -216,20 +221,19 @@ describe("DecisionPanel", () => {
     expect(screen.getByText(/ARCHITECTURE_DELTA · APR-AD/)).toBeTruthy();
   });
 
-  it("says no agent revises EXPECTED_BEHAVIOR", () => {
+  it("EXPECTED_BEHAVIOR revises via kira.expected_behavior", () => {
     wrap(
       <DecisionPanel
         stage="EXPECTED_BEHAVIOR"
         cycleType="BUG_FIX"
         cycleState="EXPECTED_BEHAVIOR"
-        inbox={approvalInbox("EXPECTED_BEHAVIOR")}
+        inbox={approvalInbox("EXPECTED_BEHAVIOR", "res-1")}
         projectId="p1"
         nextTransitions={[]}
         onDecided={() => {}}
       />,
     );
-    expect(screen.getByText(/no agent revises this item/i)).toBeTruthy();
-    expect(screen.queryByText(/until revision support ships/i)).toBeNull();
+    expect(screen.getByText(/agent will revise using your note/i)).toBeTruthy();
   });
 
   it("says no agent revises SCOPE once the cycle left PRODUCT_MODEL", () => {

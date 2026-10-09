@@ -181,7 +181,9 @@ async def run_live_greenfield_after_decompose(
                     execution_id=None,
                     ctx=plan_ctx,
                 )
-                await TaskPlanService().accept(session, plan_row.id, plan_ctx)
+                from tests.fixtures.approvals import approve_task_plan
+
+                await approve_task_plan(session, plan_row.id)
             else:
                 raise
     await wait_for_task_plan_accepted(factory, uuid.UUID(cycle_id))

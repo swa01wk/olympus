@@ -76,6 +76,47 @@ async def test_multi_dependency_task_gets_merged_depbase(
 
 
 @pytest.mark.asyncio
+async def test_single_dependency_task_is_based_on_its_candidate_commit(
+    db_session,
+    system_ctx,
+) -> None:
+    fixture = await seed_integration_fixture(db_session, system_ctx, project_key="ic-dep-1")
+    dep = await add_implementation_code_task(
+        db_session,
+        system_ctx,
+        fixture,
+        title="Only dep",
+        key_prefix="dep1s",
+    )
+    dep_sha = await commit_files_in_worktree(
+        db_session,
+        system_ctx,
+        dep,
+        {"src/only_dep.py": "def only_dep():\n    return 1\n"},
+    )
+    dependent = await add_implementation_code_task(
+        db_session,
+        system_ctx,
+        fixture,
+        title="Single dependent",
+        key_prefix="dep2s",
+    )
+    db_session.add(TaskDependency(task_id=dependent.task.id, depends_on_task_id=dep.task.id))
+    await db_session.flush()
+
+    resolution = await DependencyBaseResolver().resolve(
+        db_session,
+        dependent.task,
+        fixture.repository.id,
+        system_ctx,
+    )
+    assert resolution.policy == "DEPENDENCY_INTEGRATION"
+    assert resolution.base_commit == dep_sha
+    assert resolution.commit_available is True
+    assert resolution.inputs.get("shas") == [dep_sha]
+
+
+@pytest.mark.asyncio
 async def test_dependency_base_conflict_creates_finding(
     db_session,
     system_ctx,

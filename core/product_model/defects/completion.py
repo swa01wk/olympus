@@ -91,10 +91,10 @@ class BugFixCompletionService:
             await orch.schedule_reproduction_run(session, cycle.id, art.id, ctx)
         elif profile == "kira.expected_behavior":
             proposal = ExpectedBehaviorProposal.model_validate(output)
-            await DefectService().persist_expected_behavior(
+            resolution = await DefectService().persist_expected_behavior(
                 session, cycle.id, proposal, execution.id, ctx
             )
-            if cycle.state == "EXPECTED_BEHAVIOR":
+            if resolution.approval_id is None and cycle.state == "EXPECTED_BEHAVIOR":
                 await svc.run_command(session, cycle.id, "start_root_cause", cycle.state, ctx)
         elif profile == "warden.root_cause":
             from core.domain.task_contracts.models import TaskContract

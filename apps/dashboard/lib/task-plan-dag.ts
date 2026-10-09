@@ -5,10 +5,21 @@ export type TaskPlanBody = {
     ref: string;
     title: string;
     work_type?: string;
+    objective?: string;
+    implementation_spec_ref?: string;
+    ac_refs?: string[];
+    allowed_scope?: string[];
+    estimated_size?: "S" | "M" | "L";
   }>;
   dependencies?: Array<{
     task_ref: string;
     depends_on_ref: string;
+    reason?: string;
+  }>;
+  risks?: Array<{
+    description: string;
+    severity: "LOW" | "MEDIUM" | "HIGH";
+    related_refs?: string[];
   }>;
 };
 

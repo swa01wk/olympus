@@ -28,6 +28,7 @@ from core.assurance.models import (
     VerificationObligation,
 )
 from core.commands.context import CommandContext
+from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.events.append import append_domain_event
 from core.domain.exceptions import DomainError, Unauthorized
 from core.domain.repositories.models import Repository
@@ -71,7 +72,9 @@ def decide(inputs: GateDecisionInputs) -> GateDecision:
         reasons.append("CANONICAL_REVISION_MISMATCH")
 
     bad_sha = [
-        e["key"] for e in inputs.evidence_rows if e.get("commit_sha") != inputs.integrated_sha
+        e["key"]
+        for e in inputs.evidence_rows
+        if e.get("commit_sha") != inputs.integrated_sha and not e.get("at_affected_sha")
     ]
     if bad_sha:
         reasons.append(f"EVIDENCE_SHA_MISMATCH:{','.join(bad_sha[:5])}")
@@ -181,6 +184,8 @@ class GateFinalizerService:
             raise DomainError(code="IC_NOT_READY", message="Integration candidate not READY")
         repo = await session.get(Repository, ic.repository_id)
         decision = await self._compute_decision(session, gate, ic, repo)
+        if gate.gate_type == GateType.BASELINE:
+            await self._provisional_baseline_findings(session, gate, ic, ctx)
         policy_svc = await ensure_policy_version(session)
         gate.status = decision.status
         gate.reasons = decision.reasons
@@ -246,6 +251,7 @@ class GateFinalizerService:
                 "commit_sha": e.commit_sha,
                 "evidence_type": e.evidence_type.value,
                 "result": e.result.value,
+                "at_affected_sha": (e.details or {}).get("phase") == "REGRESSION_VALIDATION",
             }
             for e in evidence.scalars()
         ]
@@ -288,6 +294,70 @@ class GateFinalizerService:
             policy=policy,
         )
         return decide(inputs)
+
+    async def _provisional_baseline_findings(
+        self,
+        session: AsyncSession,
+        gate: Gate,
+        ic: IntegrationCandidate,
+        ctx: CommandContext,
+    ) -> None:
+        from core.assurance.findings import FindingService
+        from core.integration.enums import FindingSeverity, FindingSource
+        from core.intelligence.baselines.models import BehavioralBaseline
+        from core.intelligence.baselines.provisional import known_gaps_for_baseline
+
+        obligations = (
+            await session.execute(
+                select(VerificationObligation).where(
+                    VerificationObligation.integration_candidate_id == ic.id,
+                    VerificationObligation.gate_type == GateType.BASELINE.value,
+                    VerificationObligation.subject_type == "BASELINE",
+                )
+            )
+        ).scalars()
+        assert ic.integrated_sha is not None
+        cycle = await session.get(DeliveryCycle, ic.delivery_cycle_id)
+        project_id = cycle.project_id if cycle else None
+        if project_id is None:
+            return
+        for obl in obligations:
+            bl = await session.get(BehavioralBaseline, obl.subject_id)
+            if bl is None or not bl.provisional:
+                continue
+            ev = (
+                await session.execute(
+                    select(Evidence)
+                    .where(
+                        Evidence.obligation_id == obl.id,
+                        Evidence.result == EvidenceResult.FAIL,
+                        Evidence.commit_sha == ic.integrated_sha,
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if ev is None:
+                continue
+            known_gaps = await known_gaps_for_baseline(session, bl)
+            await FindingService().create(
+                session,
+                project_id=project_id,
+                delivery_cycle_id=ic.delivery_cycle_id,
+                source=FindingSource.SENTINEL,
+                category="RISK",
+                severity=FindingSeverity.MINOR,
+                title=f"Provisional baseline contradicted: {bl.lineage_key}",
+                detail={
+                    "baseline_id": str(bl.id),
+                    "obligation_id": str(obl.id),
+                    "evidence_id": str(ev.id),
+                    "known_gap": True,
+                    "known_gaps": known_gaps,
+                },
+                ctx=ctx,
+                integration_candidate_id=ic.id,
+                commit_sha=ic.integrated_sha,
+            )
 
     async def _maybe_finalize_siblings(
         self,

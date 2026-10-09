@@ -22,11 +22,17 @@ def _build_warden_graph(deps: GraphDeps) -> Any:
     async def review_node(state: _WardenState) -> _WardenState:
         template = load_prompt("agents/warden/prompts/review.md")
         snap = deps.request.snapshot or {}
+        decision_context = str(snap.get("decision_context") or "")
+        if not decision_context:
+            decisions = snap.get("decision_items") or []
+            if decisions:
+                decision_context = "Prior decisions:\n" + "\n".join(f"- {d}" for d in decisions)
         system = render_prompt(
             template,
             {
                 "integrated_diff": str(snap.get("integrated_diff") or ""),
                 "specs_json": json.dumps(snap.get("specs") or [], indent=2),
+                "decision_context": decision_context,
             },
         )
         result = await deps.model_router.invoke(

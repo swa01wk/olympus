@@ -428,6 +428,63 @@
   margin-bottom: var(--space-2);
 }
 
+.ol-diff-add {
+  background: var(--success-tint);
+  color: var(--success);
+}
+
+.ol-diff-remove {
+  background: var(--failure-tint);
+  color: var(--failure);
+}
+
+.ol-ws-row-detail {
+  flex-basis: 100%;
+}
+
+.ol-ws-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ol-ws-form fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ol-ws-form-item {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
+  align-items: end;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.ol-ws-form-line {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.ol-ws-form-line input {
+  flex: 1;
+}
+
+.ol-ws-form select {
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 13.5px;
+}
+
 .ol-ws-row {
   display: flex;
   flex-wrap: wrap;

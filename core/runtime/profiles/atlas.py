@@ -29,6 +29,11 @@ def _build_atlas_graph(deps: GraphDeps) -> Any:
     async def propose_node(state: _AtlasState) -> _AtlasState:
         template = load_prompt("agents/atlas/prompts/propose_architecture.md")
         snap = deps.request.snapshot or {}
+        decision_context = str(snap.get("decision_context") or "")
+        if not decision_context:
+            decisions = snap.get("decision_items") or []
+            if decisions:
+                decision_context = "Prior decisions:\n" + "\n".join(f"- {d}" for d in decisions)
         system = render_prompt(
             template,
             {
@@ -36,6 +41,7 @@ def _build_atlas_graph(deps: GraphDeps) -> Any:
                 "approved_product_summary": str(snap.get("approved_product_summary", "")),
                 "feature_specs_json": json.dumps(snap.get("feature_specs") or [], indent=2),
                 "technology_constraints": str(snap.get("technology_constraints") or ""),
+                "decision_context": decision_context,
                 **_revision_vars(snap),
             },
         )
@@ -72,12 +78,18 @@ def _build_atlas_delta_graph(deps: GraphDeps) -> Any:
     async def delta_node(state: _AtlasState) -> _AtlasState:
         template = load_prompt("agents/atlas/prompts/architecture_delta.md")
         snap = deps.request.snapshot or {}
+        decision_context = str(snap.get("decision_context") or "")
+        if not decision_context:
+            decisions = snap.get("decision_items") or []
+            if decisions:
+                decision_context = "Prior decisions:\n" + "\n".join(f"- {d}" for d in decisions)
         system = render_prompt(
             template,
             {
                 "project_name": str(snap.get("project_name", "project")),
                 "architecture_summary": str(snap.get("architecture_summary", "")),
                 "impact_summary": str(snap.get("impact_summary", "")),
+                "decision_context": decision_context,
                 **_revision_vars(snap),
             },
         )

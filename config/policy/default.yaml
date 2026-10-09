@@ -6,6 +6,8 @@ approvals_required:
   IMPLEMENTATION_SPEC: true
   SPEC_DELTA: true
   SPEC_DECISION: true
+  EXPECTED_BEHAVIOR: true
+  TASK_PLAN: true
   REPAIR_SPEC: true
   PROMOTION: true
   FINDING_WAIVER: true

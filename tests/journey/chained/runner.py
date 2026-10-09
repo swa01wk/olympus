@@ -295,7 +295,9 @@ async def stage_dc001_greenfield(
                 execution_id=None,
                 ctx=plan_ctx,
             )
-            await TaskPlanService().accept(session, plan_row.id, plan_ctx)
+            from tests.fixtures.approvals import approve_task_plan
+
+            await approve_task_plan(session, plan_row.id)
         await ctx.client.post(
             f"/delivery-cycles/{cycle_id}/commands/start_development",
             json={"expected_state": "PLANNING"},

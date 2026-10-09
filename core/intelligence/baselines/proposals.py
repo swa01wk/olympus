@@ -184,6 +184,9 @@ class BaselineProposalService:
         )
         session.add(row)
         await session.flush()
+        from core.intelligence.baselines.provisional import apply_provisional_if_known_gap
+
+        await apply_provisional_if_known_gap(session, row, cycle.id)
         return row
 
     async def create_from_characterization(
@@ -237,6 +240,9 @@ class BaselineProposalService:
         )
         session.add(row)
         await session.flush()
+        from core.intelligence.baselines.provisional import apply_provisional_if_known_gap
+
+        await apply_provisional_if_known_gap(session, row, cycle.id)
         await append_domain_event(
             session,
             aggregate_type="baseline",

@@ -45,6 +45,21 @@ async def git_commit(ctx: ToolExecutionContext, params: dict[str, object]) -> di
     message = str(params.get("message", "feat: implementation"))
     git = GitCli()
     git.run(["add", "-A"], cwd=ctx.workspace_path)
+    from core.domain.tasks.models import Task
+    from core.execution.snapshots.product_context import (
+        missing_protected_tests,
+        protected_test_refs,
+    )
+
+    task = await ctx.session.get(Task, ctx.task_id)
+    if task is not None:
+        missing = missing_protected_tests(
+            ctx.workspace_path, await protected_test_refs(ctx.session, task)
+        )
+        if missing:
+            raise PathPolicyViolation(
+                "protected tests missing from worktree: " + ", ".join(missing)
+            )
     status = git.run(["status", "--porcelain"], cwd=ctx.workspace_path).stdout.splitlines()
     changed: list[dict[str, object]] = []
     for line in status:

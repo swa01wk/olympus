@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.enums import SpecStatus
 from core.domain.tasks.models import Task
-from core.planning.models import ImplementationSpec
 from core.product_model.models import AcceptanceCriterion, FeatureSpec, ScopeSet, ScopeSetItem
 
 
@@ -194,20 +193,15 @@ async def planning_prompt_fields_for_task(
                 )
 
     if agent_profile == "kira.task_plan":
-        impl_rows = await session.execute(
-            select(ImplementationSpec).where(
-                ImplementationSpec.project_id == cycle.project_id,
-                ImplementationSpec.status == SpecStatus.APPROVED,
-            )
-        )
+        from core.planning.task_plans.service import TaskPlanService
+
         impl_list = [
             {
                 "lineage_key": r.lineage_key,
-                "version": r.version,
                 "summary": (r.body or {}).get("summary", ""),
                 "file_scope": (r.body or {}).get("file_scope", []),
             }
-            for r in impl_rows.scalars()
+            for r in await TaskPlanService().implementation_specs_for_cycle(session, cycle)
         ]
         out["implementation_specs_json"] = json.dumps(impl_list, indent=2)
 

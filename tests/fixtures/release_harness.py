@@ -244,6 +244,14 @@ async def integration_ic_after_start_integration(
         ).scalar_one_or_none()
         if finding is not None:
             detail = f" finding={finding.category}: {finding.title}"
+        if ic.checks_artifact_id is not None:
+            from core.domain.artifacts.models import Artifact  # noqa: PLC0415
+            from core.execution.artifacts import ArtifactStore  # noqa: PLC0415
+
+            artifact = await session.get(Artifact, ic.checks_artifact_id)
+            if artifact is not None:
+                raw = ArtifactStore().read_bytes(artifact).decode("utf-8", errors="replace")
+                detail += f"\nintegration checks: {raw[-4000:]}"
         raise AssertionError(f"integration IC not READY: {ic.status}{detail}")
     return ic
 

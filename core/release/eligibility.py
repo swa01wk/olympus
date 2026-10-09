@@ -312,6 +312,7 @@ async def _cond_baselines_pass(
                 select(VerificationObligation).where(
                     VerificationObligation.integration_candidate_id == ic.id,
                     VerificationObligation.gate_type == "BASELINE",
+                    VerificationObligation.required.is_(True),
                 )
             )
         )

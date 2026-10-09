@@ -5,6 +5,7 @@ import { STAGES_BY_CYCLE_TYPE } from "@/src/control-plane/stage-lanes";
 export type SpineStageStatus = "done" | "current" | "waiting" | "blocked" | "future";
 
 // Backend never creates REPAIR_SPEC, READINESS, SPEC_DECISION, or DEPLOYMENT approvals (plan G5).
+// EXPECTED_BEHAVIOR and TASK_PLAN are created from RL3.
 
 /** Maps pending approval types to lifecycle stage (Decision panel / §5), per cycle type. */
 export function approvalStage(
@@ -37,6 +38,9 @@ export function approvalStage(
       return "REPRODUCTION";
     case "EXPECTED_BEHAVIOR":
       return "EXPECTED_BEHAVIOR";
+    case "TASK_PLAN":
+      if (cycleType === "BUG_FIX") return "ROOT_CAUSE";
+      return "PLANNING";
     case "PROMOTION":
       return "BASELINE";
     case "FINDING_WAIVER":

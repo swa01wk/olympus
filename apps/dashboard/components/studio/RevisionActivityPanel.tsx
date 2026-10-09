@@ -1,7 +1,8 @@
 "use client";
 
 import { Panel } from "@/components/primitives";
-import { diffJsonBodies, type DiffLine } from "@/lib/json-line-diff";
+import { JsonDiffView } from "@/components/studio/JsonDiffView";
+import { diffJsonBodies } from "@/lib/json-line-diff";
 import { revisingAgentLabel } from "@/lib/revision-agents";
 import { fetchRevisionSubjectBody } from "@/lib/revision-subject-body";
 import { useStudioFocus } from "@/lib/studio-focus";
@@ -9,28 +10,6 @@ import { useStudioRevision } from "@/lib/studio-revision";
 import { useApprovalDetail } from "@/src/api/hooks/use-studio-queries";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-
-function DiffView({ lines }: { lines: DiffLine[] }) {
-  return (
-    <pre className="ol-ws-pre ol-revision-diff" aria-label="Revision diff">
-      {lines.map((line, i) => (
-        <div
-          key={`${i}-${line.kind}`}
-          className={
-            line.kind === "add"
-              ? "ol-diff-add"
-              : line.kind === "remove"
-                ? "ol-diff-remove"
-                : "ol-diff-same"
-          }
-        >
-          {line.kind === "add" ? "+ " : line.kind === "remove" ? "- " : "  "}
-          {line.text}
-        </div>
-      ))}
-    </pre>
-  );
-}
 
 export function RevisionActivityPanel() {
   const focus = useStudioFocus();
@@ -82,7 +61,7 @@ export function RevisionActivityPanel() {
           {diffQuery.isError && (
             <p className="ol-body-sm ol-chat-err">Could not load revision bodies for diff.</p>
           )}
-          {diffQuery.data && <DiffView lines={diffQuery.data} />}
+          {diffQuery.data && <JsonDiffView lines={diffQuery.data} />}
           <p className="ol-body-sm ol-muted">
             A fresh approval should appear in the Decision panel when the subject is ready.
           </p>

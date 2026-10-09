@@ -4,9 +4,10 @@ import uuid
 
 from core.commands.context import CommandContext
 from core.intelligence.baselines.models import BaselineSet, BehavioralBaseline
+from core.intelligence.baselines.provisional import known_gaps_for_baseline
 from core.intelligence.baselines.service import BaselineService
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +28,8 @@ class BaselineResponse(BaseModel):
     check_ref: str
     established_sha: str
     feature_spec_id: uuid.UUID | None
+    provisional: bool = False
+    provisional_known_gaps: list[str] = Field(default_factory=list)
     latest_evidence_id: uuid.UUID | None = None
 
 
@@ -38,6 +41,24 @@ class BaselineSetResponse(BaseModel):
     commit_sha: str
     content_hash: str
     delivery_cycle_id: uuid.UUID
+
+
+async def _baseline_response(session: AsyncSession, row: BehavioralBaseline) -> BaselineResponse:
+    provisional = bool(row.provisional)
+    return BaselineResponse(
+        id=row.id,
+        lineage_key=row.lineage_key,
+        version=row.version,
+        status=row.status.value,
+        source=row.source.value,
+        check_kind=row.check_kind.value,
+        check_ref=row.check_ref,
+        established_sha=row.established_sha,
+        feature_spec_id=row.feature_spec_id,
+        provisional=provisional,
+        provisional_known_gaps=(await known_gaps_for_baseline(session, row) if provisional else []),
+        latest_evidence_id=row.established_evidence_id,
+    )
 
 
 @router.get("/projects/{project_id}/baselines", response_model=list[BaselineResponse])
@@ -56,23 +77,7 @@ async def list_baselines(
         .scalars()
         .all()
     )
-    out: list[BaselineResponse] = []
-    for row in rows:
-        out.append(
-            BaselineResponse(
-                id=row.id,
-                lineage_key=row.lineage_key,
-                version=row.version,
-                status=row.status.value,
-                source=row.source.value,
-                check_kind=row.check_kind.value,
-                check_ref=row.check_ref,
-                established_sha=row.established_sha,
-                feature_spec_id=row.feature_spec_id,
-                latest_evidence_id=row.established_evidence_id,
-            )
-        )
-    return out
+    return [await _baseline_response(session, row) for row in rows]
 
 
 @router.get("/baselines/{baseline_id}", response_model=BaselineResponse)
@@ -83,18 +88,7 @@ async def get_baseline(
     row = await session.get(BehavioralBaseline, baseline_id)
     if row is None:
         raise HTTPException(status_code=404, detail="baseline not found")
-    return BaselineResponse(
-        id=row.id,
-        lineage_key=row.lineage_key,
-        version=row.version,
-        status=row.status.value,
-        source=row.source.value,
-        check_kind=row.check_kind.value,
-        check_ref=row.check_ref,
-        established_sha=row.established_sha,
-        feature_spec_id=row.feature_spec_id,
-        latest_evidence_id=row.established_evidence_id,
-    )
+    return await _baseline_response(session, row)
 
 
 @router.post("/baselines/{baseline_id}/activate", response_model=BaselineResponse)
@@ -104,18 +98,7 @@ async def activate_baseline(
     ctx: CommandContext = Depends(command_context),
 ) -> BaselineResponse:
     row = await BaselineService().activate_human(session, baseline_id, ctx)
-    return BaselineResponse(
-        id=row.id,
-        lineage_key=row.lineage_key,
-        version=row.version,
-        status=row.status.value,
-        source=row.source.value,
-        check_kind=row.check_kind.value,
-        check_ref=row.check_ref,
-        established_sha=row.established_sha,
-        feature_spec_id=row.feature_spec_id,
-        latest_evidence_id=row.established_evidence_id,
-    )
+    return await _baseline_response(session, row)
 
 
 @router.get("/projects/{project_id}/baseline-sets", response_model=list[BaselineSetResponse])

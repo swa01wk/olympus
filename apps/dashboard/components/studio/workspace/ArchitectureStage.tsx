@@ -7,6 +7,7 @@ import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspac
 import { StudioMutationAction } from "@/components/studio/workspace/StudioMutationAction";
 import { useRegisterStudioFocus } from "@/lib/studio-focus";
 import { useProjectArchitecture } from "@/src/api/hooks/use-studio-queries";
+import { ArchitectureVersionEditor } from "@/components/studio/editors/ArchitectureVersionEditor";
 import { proposeArchitecture, requestArchitectureApproval } from "@/src/api/commands";
 import { useState } from "react";
 
@@ -47,6 +48,9 @@ export function ArchitectureStage({ projectId, cycleId }: { projectId: string; c
             </>
           )}
         </Panel>
+      )}
+      {arch && arch.status === "PROPOSED" && (
+        <ArchitectureVersionEditor architecture={arch} projectId={projectId} cycleId={cycleId} />
       )}
       <Panel title="Actions" sub="REST-only generation (not proposable from chat)">
         <StudioMutationAction

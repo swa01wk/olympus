@@ -11,12 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.commands.context import CommandContext
 from core.domain.approvals.models import Approval
 from core.domain.delivery_cycles.models import DeliveryCycle
-from core.domain.enums import ApprovalStatus, ApprovalType
+from core.domain.enums import ApprovalStatus, ApprovalType, DeliveryCycleType
 from core.domain.events.append import append_domain_event
 from core.domain.task_contracts.models import TaskContract
 from core.domain.tasks.models import Task
 from core.intelligence.impact.models import SpecDelta
-from core.planning.models import Architecture, ImplementationSpec
+from core.planning.models import Architecture, ImplementationSpec, TaskPlanRow
 from core.planning.orchestrator import PlanningOrchestrator
 from core.product_model.changes.orchestrator import FeatureChangeOrchestrator
 from core.product_model.decomposition import DecompositionOrchestrator
@@ -114,6 +114,23 @@ class RevisionService:
                 return json.dumps(delta.changes, sort_keys=True)
         if subject_type == "scope_set":
             return json.dumps({"scope_set_id": str(approval.subject_id)}, sort_keys=True)
+        if subject_type == "expected_behavior_resolution":
+            from core.product_model.defects.models import ExpectedBehaviorResolution
+
+            row = await session.get(ExpectedBehaviorResolution, approval.subject_id)
+            if row is not None:
+                return json.dumps(
+                    {
+                        "classification": row.classification,
+                        "statement": row.statement,
+                        "contradicted_baseline_ids": row.contradicted_baseline_ids,
+                    },
+                    sort_keys=True,
+                )
+        if subject_type == "task_plan":
+            plan = await session.get(TaskPlanRow, approval.subject_id)
+            if plan is not None:
+                return json.dumps(plan.body or {}, sort_keys=True)
         return "{}"
 
     async def _schedule(
@@ -217,5 +234,29 @@ class RevisionService:
                 session, cycle_id, ctx, revision=revision
             )
             return uuid.UUID(started["interpret_task_id"])
+
+        if (
+            approval.approval_type == ApprovalType.EXPECTED_BEHAVIOR
+            and approval.subject_type == "expected_behavior_resolution"
+        ):
+            started = await BugFixOrchestrator().schedule_expected_behavior(
+                session, cycle_id, ctx, revision=revision
+            )
+            return uuid.UUID(started.get("task_id") or started["expected_behavior_task_id"])
+
+        if (
+            approval.approval_type == ApprovalType.TASK_PLAN
+            and approval.subject_type == "task_plan"
+        ):
+            cycle = await session.get(DeliveryCycle, cycle_id)
+            if cycle is not None and cycle.type == DeliveryCycleType.BUG_FIX:
+                started = await BugFixOrchestrator().schedule_repair_task_plan(
+                    session, cycle_id, ctx, revision=revision
+                )
+                return uuid.UUID(started["repair_task_plan_task_id"])
+            started = await PlanningOrchestrator().start_task_plan_generation(
+                session, cycle_id, ctx, revision=revision
+            )
+            return uuid.UUID(started["task_id"])
 
         return None

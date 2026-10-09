@@ -230,3 +230,84 @@ class ImplementationSpecService:
 
     def parse_body(self, row: ImplementationSpec) -> ImplementationSpecBody:
         return ImplementationSpecBody.model_validate(row.body)
+
+    async def create_edited_version(
+        self,
+        session: AsyncSession,
+        *,
+        spec_id: uuid.UUID,
+        body: ImplementationSpecBody,
+        note: str | None,
+        delivery_cycle_id: uuid.UUID,
+        ctx: CommandContext,
+    ) -> ImplementationSpec:
+        from core.domain.delivery_cycles.models import DeliveryCycle
+        from core.domain.enums import ActorKind, KnowledgeClass, KnowledgeItemStatus
+        from core.domain.exceptions import Unauthorized
+        from core.planning.schemas import ImplementationSpecDraft
+        from core.product_model.models import KnowledgeItem
+        from core.review.auto_request import cancel_pending_approvals
+
+        if ctx.actor.kind != ActorKind.HUMAN:
+            raise Unauthorized("Only a human may edit an implementation spec")
+        current = await session.get(ImplementationSpec, spec_id)
+        if current is None:
+            raise DomainError(code="NOT_FOUND", message="ImplementationSpec not found")
+        if current.status != SpecStatus.PROPOSED:
+            raise DomainError(
+                code="INVALID_STATE", message="Only PROPOSED implementation spec is editable"
+            )
+        cycle = await session.get(DeliveryCycle, delivery_cycle_id)
+        if cycle is None or cycle.project_id != current.project_id:
+            raise DomainError(code="NOT_FOUND", message="Delivery cycle not found for project")
+        owning_stage = "ROOT_CAUSE" if current.kind == "REPAIR" else "PLANNING"
+        if cycle.state != owning_stage:
+            raise DomainError(
+                code="INVALID_STATE", message="Cycle stage does not allow implementation spec edit"
+            )
+        draft = ImplementationSpecDraft(body=body)
+        row = await self.persist_draft(
+            session,
+            feature_spec_id=current.feature_spec_id,
+            draft=draft,
+            execution_id=None,
+            ctx=ctx,
+            kind_override=current.kind,
+            delivery_cycle_id=delivery_cycle_id,
+        )
+        current.status = SpecStatus.SUPERSEDED
+        await cancel_pending_approvals(
+            session,
+            approval_type=ApprovalType.IMPLEMENTATION_SPEC,
+            subject_type="implementation_spec",
+            subject_id=current.id,
+            correlation_id=ctx.correlation_id,
+        )
+        await append_domain_event(
+            session,
+            aggregate_type="implementation_spec",
+            aggregate_id=row.id,
+            event_type="implementation_spec.edited",
+            payload={"note": note or "", "previous_id": str(current.id)},
+            actor_id=ctx.actor.id,
+            correlation_id=ctx.correlation_id,
+            project_id=row.project_id,
+            delivery_cycle_id=delivery_cycle_id,
+        )
+        if note and note.strip():
+            session.add(
+                KnowledgeItem(
+                    project_id=row.project_id,
+                    delivery_cycle_id=delivery_cycle_id,
+                    knowledge_class=KnowledgeClass.DECISION,
+                    statement=(
+                        f"IMPLEMENTATION_SPEC {row.lineage_key} v{row.version}: {note.strip()}"
+                    ),
+                    subject_refs=[{"ref_type": "IMPLEMENTATION_SPEC", "ref_id": str(row.id)}],
+                    provenance={"origin": "HUMAN", "actor_id": str(ctx.actor.id)},
+                    status=KnowledgeItemStatus.ACTIVE,
+                    blocking=False,
+                )
+            )
+            await session.flush()
+        return row

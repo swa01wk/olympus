@@ -40,6 +40,7 @@ The live journey helpers fill in for agents in these places (verify each and fin
 - `bug_fix_helpers.py`: the `maybe_apply_*_fallback` functions (triage, reproduction, root cause, repair spec).
 - `release_harness.py`: `patch_agentless_assurance`, `_stub_unsatisfied_required_obligations` and `_waive_open_blocking_findings`; it also calls `finalize_all_pending_gates` (`tests/fixtures/assurance_harness.py`) with a synthetic human.
 - `brownfield_phase12_harness.py`: `_declare_ready_with_workflow_thresholds` (zeroes every readiness threshold), and the empty characterization plan from `FakeProvider` in live tests.
+- `test_feature_change_via_issue_tracker.py` and its helpers (`gitea_integration_helpers.py`, `phase16_issue_tracker_path.py`): it runs through `feature_change_live_pipeline.py` and `release_harness.py`, so the gates above must cover it; check for fallbacks of its own. Its `seed_trusted_project` start is a seed, not a fallback: keep it and say so in its docstring.
 
 Steps:
 
@@ -201,6 +202,8 @@ Add `make test-journey-taskflow` and `make test-journey-kanban`.
 
 ## RL4.4 — Studio live run (C7b)
 
+Pre-check: before each Studio attempt, run `tests/journey/test_mvp_chained_supportdesk.py` live with `OLYMPUS_JOURNEY_FALLBACKS` unset (about 4 minutes; it runs the same four journeys without the UI). Fix any `AGENT_STALLED` or defect it shows first, under the production-code rule above. It is a development loop, not a separate acceptance gate.
+
 Implement C7b from `docs/design/olympus-cursor-prompt-chat-workspace.md` (Playwright, four journeys through the UI, two browser contexts, `BACKEND_GAP` on any missing route). Also, in the greenfield spec:
 
 - At ARCHITECTURE, the approver uses **Request changes**. Assert the Studio shows "Revising", then a v1→v2 diff and a new Decision panel.
@@ -216,12 +219,13 @@ Then run `scripts/acceptance/evaluate_mvp.py` as C7b describes, with the RL4.1 f
 
 - run ids, duration and LLM spend per suite;
 - every `AGENT_STALLED` and `BACKEND_GAP` seen, with its stage;
-- the Playwright report path.
+- the Playwright report path;
+- the `make test-journey-issue-tracker` run (run id, duration, spend, result), noting that it starts from a seeded project.
 
 Add a changelog row.
 
 ## Phase acceptance
 
 - `make check` green; deterministic lanes unchanged.
-- `make test-journey-taskflow`, `make test-journey-kanban` and `npm run test:e2e:studio` pass live with `OLYMPUS_JOURNEY_FALLBACKS` unset.
+- `make test-journey-taskflow`, `make test-journey-kanban`, `make test-journey-issue-tracker` and `npm run test:e2e:studio` pass live with `OLYMPUS_JOURNEY_FALLBACKS` unset.
 - The evaluator passes, and there's no `var/olympus/reports/fallbacks_<run_id>.json`.

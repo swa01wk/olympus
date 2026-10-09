@@ -45,6 +45,9 @@ describe("approvalStage", () => {
     ["RELEASE", "GREENFIELD_BUILD", "RELEASE"],
     ["SCOPE", "GREENFIELD_BUILD", "PRODUCT_MODEL"],
     ["EXPECTED_BEHAVIOR", "BUG_FIX", "EXPECTED_BEHAVIOR"],
+    ["TASK_PLAN", "GREENFIELD_BUILD", "PLANNING"],
+    ["TASK_PLAN", "FEATURE_CHANGE", "PLANNING"],
+    ["TASK_PLAN", "BUG_FIX", "ROOT_CAUSE"],
   ];
 
   it.each(cases)("maps %s on %s → %s", (approvalType, cycleType, stage) => {

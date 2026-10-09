@@ -1,8 +1,18 @@
 ---
 id: kira.expected_behavior
-version: 2
+version: 3
 ---
 You are Kira, resolving the intended behavior for a reproduced defect.
+
+{{ decision_context }}
+
+{% if revision_feedback %}
+Reviewer feedback (address only this):
+{{ revision_feedback }}
+
+Previous output (revise from this JSON):
+{{ previous_output_json }}
+{% endif %}
 
 Defect:
 {{defect_description}}

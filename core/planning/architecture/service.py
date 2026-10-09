@@ -13,8 +13,8 @@ from core.domain.events.append import append_domain_event
 from core.domain.exceptions import DomainError
 from core.planning.architecture.validation import validate_architecture_proposal
 from core.planning.models import Architecture, ArchitectureContract
-from core.planning.schemas import ArchitectureBody, ArchitectureProposal
-from core.review.auto_request import ensure_pending_approval
+from core.planning.schemas import ArchitectureBody, ArchitectureProposal, ContractDraft
+from core.review.auto_request import cancel_pending_approvals, ensure_pending_approval
 
 
 class ArchitectureService:
@@ -307,3 +307,142 @@ class ArchitectureService:
 
     def parse_body(self, arch: Architecture) -> ArchitectureBody:
         return ArchitectureBody.model_validate(arch.body)
+
+    async def create_edited_version(
+        self,
+        session: AsyncSession,
+        *,
+        architecture_id: uuid.UUID,
+        body: ArchitectureBody,
+        contracts: list[ContractDraft] | None,
+        note: str | None,
+        delivery_cycle_id: uuid.UUID,
+        ctx: CommandContext,
+    ) -> Architecture:
+        from core.domain.delivery_cycles.models import DeliveryCycle
+        from core.domain.enums import ActorKind
+        from core.domain.exceptions import Unauthorized
+
+        if ctx.actor.kind != ActorKind.HUMAN:
+            raise Unauthorized("Only a human may edit an architecture")
+        current = await session.get(Architecture, architecture_id)
+        if current is None:
+            raise DomainError(code="NOT_FOUND", message="Architecture not found")
+        if current.status != SpecStatus.PROPOSED:
+            raise DomainError(
+                code="INVALID_STATE", message="Only PROPOSED architecture is editable"
+            )
+        if current.kind == "DELTA":
+            raise DomainError(
+                code="INVALID_STATE", message="Architecture deltas are not directly editable"
+            )
+        cycle = await session.get(DeliveryCycle, delivery_cycle_id)
+        if cycle is None or cycle.project_id != current.project_id:
+            raise DomainError(code="NOT_FOUND", message="Delivery cycle not found for project")
+        if cycle.state != "ARCHITECTURE":
+            raise DomainError(
+                code="INVALID_STATE", message="Cycle stage does not allow architecture edit"
+            )
+        if contracts is None:
+            contracts = [
+                ContractDraft(
+                    key=c.key,
+                    kind=c.kind,  # type: ignore[arg-type]
+                    name=c.name,
+                    method=(c.definition or {}).get("method") or "",
+                    path=(c.definition or {}).get("path") or "",
+                    description=(c.definition or {}).get("description") or "",
+                )
+                for c in (
+                    await session.execute(
+                        select(ArchitectureContract).where(
+                            ArchitectureContract.architecture_id == current.id
+                        )
+                    )
+                ).scalars()
+            ]
+        proposal = ArchitectureProposal(body=body, contracts=contracts)
+        errors = validate_architecture_proposal(proposal)
+        if errors:
+            raise DomainError(
+                code="VALIDATION_FAILED",
+                message="Architecture body invalid",
+                details={"errors": errors},
+            )
+        current.status = SpecStatus.SUPERSEDED
+        await cancel_pending_approvals(
+            session,
+            approval_type=ApprovalType.ARCHITECTURE,
+            subject_type="architecture",
+            subject_id=current.id,
+            correlation_id=ctx.correlation_id,
+        )
+        body_dict = body.model_dump(mode="json")
+        row = Architecture(
+            project_id=current.project_id,
+            lineage_key=current.lineage_key,
+            version=current.version + 1,
+            status=SpecStatus.PROPOSED,
+            kind=current.kind,
+            body=body_dict,
+            content_hash=sha256_hex(body_dict),
+            supersedes_id=current.id,
+            execution_id=None,
+        )
+        session.add(row)
+        await session.flush()
+        for contract in proposal.contracts:
+            definition = {
+                "method": contract.method,
+                "path": contract.path,
+                "description": contract.description,
+            }
+            session.add(
+                ArchitectureContract(
+                    architecture_id=row.id,
+                    key=contract.key,
+                    kind=contract.kind,
+                    name=contract.name,
+                    definition=definition,
+                )
+            )
+        await append_domain_event(
+            session,
+            aggregate_type="architecture",
+            aggregate_id=row.id,
+            event_type="architecture.edited",
+            payload={"note": note or "", "previous_version": current.version},
+            actor_id=ctx.actor.id,
+            correlation_id=ctx.correlation_id,
+            project_id=row.project_id,
+            delivery_cycle_id=delivery_cycle_id,
+        )
+        await ensure_pending_approval(
+            session,
+            project_id=row.project_id,
+            approval_type=ApprovalType.ARCHITECTURE,
+            subject_type="architecture",
+            subject_id=row.id,
+            subject_version=row.version,
+            subject_hash=row.content_hash,
+            delivery_cycle_id=delivery_cycle_id,
+            ctx=ctx,
+        )
+        if note and note.strip():
+            from core.domain.enums import KnowledgeClass, KnowledgeItemStatus
+            from core.product_model.models import KnowledgeItem
+
+            session.add(
+                KnowledgeItem(
+                    project_id=row.project_id,
+                    delivery_cycle_id=delivery_cycle_id,
+                    knowledge_class=KnowledgeClass.DECISION,
+                    statement=f"ARCHITECTURE {row.lineage_key} v{row.version}: {note.strip()}",
+                    subject_refs=[{"ref_type": "ARCHITECTURE", "ref_id": str(row.id)}],
+                    provenance={"origin": "HUMAN", "actor_id": str(ctx.actor.id)},
+                    status=KnowledgeItemStatus.ACTIVE,
+                    blocking=False,
+                )
+            )
+            await session.flush()
+        return row

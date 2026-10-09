@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.commands.context import CommandContext
+from core.domain.approvals.service import ApprovalService
+from core.domain.canonical_json import sha256_hex
 from core.domain.delivery_cycles.models import DeliveryCycle
-from core.domain.enums import DeliveryCycleType, SpecStatus, TaskOrigin, WorkType
+from core.domain.enums import ApprovalType, DeliveryCycleType, SpecStatus, TaskOrigin, WorkType
 from core.domain.events.append import append_domain_event
 from core.domain.exceptions import DomainError
 from core.domain.task_contracts.service import ContractService
@@ -16,10 +19,21 @@ from core.domain.tasks.service import TaskService
 from core.planning.compiler import CompilerInputs, TaskContractCompiler
 from core.planning.implementation_specs.service import ImplementationSpecService
 from core.planning.models import Architecture, ImplementationSpec, TaskPlanRow, TaskSpecRef
-from core.planning.schemas import TaskPlan
+from core.planning.schemas import ImplementationSpecBody, PlanValidationReport, TaskPlan
 from core.planning.task_plans.validation import TaskPlanValidator
-from core.policy.policy_service import ensure_policy_version
+from core.policy.policy_service import PolicyService, ensure_policy_version
 from core.product_model.models import AcceptanceCriterion, FeatureSpec, ScopeSet, ScopeSetItem
+from core.review.auto_request import ensure_pending_approval
+
+
+@dataclass(frozen=True, slots=True)
+class TaskPlanCheck:
+    plan: TaskPlan
+    report: PlanValidationReport
+    implementation_spec_ids: list[uuid.UUID]
+    impl_by_lineage: dict[str, ImplementationSpec]
+    ac_by_key: dict[str, AcceptanceCriterion]
+    policy: PolicyService
 
 
 class TaskPlanService:
@@ -88,6 +102,56 @@ class TaskPlanService:
             )
         ).scalar_one_or_none()
 
+    async def implementation_specs_for_cycle(
+        self,
+        session: AsyncSession,
+        cycle: DeliveryCycle,
+    ) -> list[ImplementationSpec]:
+        """Approved implementation specs a cycle's task plan is planned and validated against.
+
+        One row per lineage (its latest APPROVED version): the cycle's REPAIR spec for a bug fix,
+        otherwise the specs of the features in the cycle's scope, otherwise every lineage in the
+        project.
+        """
+        if cycle.type == DeliveryCycleType.BUG_FIX:
+            repair = await self._approved_repair_impl_for_cycle(session, cycle)
+            if repair is not None:
+                return [repair]
+        query = (
+            select(ImplementationSpec)
+            .where(
+                ImplementationSpec.project_id == cycle.project_id,
+                ImplementationSpec.status == SpecStatus.APPROVED,
+            )
+            .order_by(ImplementationSpec.version.desc())
+        )
+        scope_set = (
+            await session.execute(
+                select(ScopeSet)
+                .where(ScopeSet.delivery_cycle_id == cycle.id)
+                .order_by(ScopeSet.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if scope_set is not None:
+            feature_lineages = (
+                select(FeatureSpec.lineage_key)
+                .join(ScopeSetItem, ScopeSetItem.feature_spec_id == FeatureSpec.id)
+                .where(ScopeSetItem.scope_set_id == scope_set.id)
+            )
+            scoped = query.join(
+                FeatureSpec, FeatureSpec.id == ImplementationSpec.feature_spec_id
+            ).where(FeatureSpec.lineage_key.in_(feature_lineages))
+            rows = list((await session.execute(scoped)).scalars())
+        else:
+            rows = []
+        if not rows:
+            rows = list((await session.execute(query)).scalars())
+        latest: dict[str, ImplementationSpec] = {}
+        for row in rows:
+            latest.setdefault(row.lineage_key, row)
+        return list(latest.values())
+
     def _enrich_bug_fix_task_plan(
         self,
         plan: TaskPlan,
@@ -127,6 +191,18 @@ class TaskPlanService:
         execution_id: uuid.UUID | None,
         ctx: CommandContext,
     ) -> TaskPlanRow:
+        cycle = await session.get(DeliveryCycle, delivery_cycle_id)
+        if cycle is None:
+            raise DomainError(code="NOT_FOUND", message="Delivery cycle not found")
+        check = await self.check_plan(session, cycle, plan, implementation_spec_ids)
+        if not check.report.ok:
+            raise DomainError(
+                code="VALIDATION_FAILED",
+                message="TaskPlan validation failed",
+                details={"errors": check.report.errors},
+            )
+        plan = check.plan
+
         prior = await session.execute(
             select(TaskPlanRow)
             .where(
@@ -142,8 +218,9 @@ class TaskPlanService:
             delivery_cycle_id=delivery_cycle_id,
             execution_id=execution_id,
             status="PROPOSED",
-            implementation_spec_ids=[str(i) for i in implementation_spec_ids],
+            implementation_spec_ids=[str(i) for i in check.implementation_spec_ids],
             body=plan.model_dump(mode="json"),
+            validation_report=check.report.model_dump(mode="json"),
         )
         session.add(row)
         await session.flush()
@@ -157,36 +234,35 @@ class TaskPlanService:
             correlation_id=ctx.correlation_id,
             delivery_cycle_id=delivery_cycle_id,
         )
+        await ensure_pending_approval(
+            session,
+            project_id=cycle.project_id,
+            approval_type=ApprovalType.TASK_PLAN,
+            subject_type="task_plan",
+            subject_id=row.id,
+            subject_version=1,
+            subject_hash=sha256_hex(row.body),
+            delivery_cycle_id=delivery_cycle_id,
+            ctx=ctx,
+        )
         return row
 
-    async def accept(
+    async def check_plan(
         self,
         session: AsyncSession,
-        task_plan_id: uuid.UUID,
-        ctx: CommandContext,
-    ) -> TaskPlanRow:
-        from core.domain.delivery_cycles.models import DeliveryCycle
+        cycle: DeliveryCycle,
+        plan: TaskPlan,
+        implementation_spec_ids: list[uuid.UUID],
+    ) -> TaskPlanCheck:
+        """Validate a plan exactly as accept does; bug-fix plans come back enriched.
 
-        plan_row = await session.get(TaskPlanRow, task_plan_id)
-        if plan_row is None:
-            raise DomainError(code="NOT_FOUND", message="TaskPlan not found")
-        if plan_row.status != "PROPOSED":
-            raise DomainError(code="INVALID_STATE", message="TaskPlan must be PROPOSED")
-
-        cycle = await session.get(DeliveryCycle, plan_row.delivery_cycle_id)
-        if cycle is None:
-            raise DomainError(code="NOT_FOUND", message="Delivery cycle not found")
-
-        plan = TaskPlan.model_validate(plan_row.body)
-        impl_ids = [uuid.UUID(i) for i in plan_row.implementation_spec_ids]
-        if cycle.type == DeliveryCycleType.BUG_FIX and not impl_ids:
-            repair = await self._approved_repair_impl_for_cycle(session, cycle)
-            if repair is not None:
-                impl_ids = [repair.id]
-                plan_row.implementation_spec_ids = [str(repair.id)]
-                await session.flush()
-        specs_by_lineage: dict[str, object] = {}
+        Enrichment is idempotent, so a stored plan re-checked at accept keeps its approved hash.
+        """
+        impl_ids = list(implementation_spec_ids) or [
+            r.id for r in await self.implementation_specs_for_cycle(session, cycle)
+        ]
         impl_by_lineage: dict[str, ImplementationSpec] = {}
+        specs_by_lineage: dict[str, ImplementationSpecBody] = {}
         for impl_id in impl_ids:
             impl = await session.get(ImplementationSpec, impl_id)
             if impl is None or impl.status != SpecStatus.APPROVED:
@@ -194,29 +270,25 @@ class TaskPlanService:
             impl_by_lineage[impl.lineage_key] = impl
             specs_by_lineage[impl.lineage_key] = self._impl.parse_body(impl)
 
+        errors: list[str] = []
         if cycle.type == DeliveryCycleType.BUG_FIX:
             from core.product_model.defects.repair import RepairSpecValidator
 
             repair_impl = await self._approved_repair_impl_for_cycle(session, cycle)
             if repair_impl is not None:
                 plan = self._enrich_bug_fix_task_plan(plan, repair_impl)
-                plan_row.body = plan.model_dump(mode="json")
-                await session.flush()
-            ok, errors = RepairSpecValidator().validate_task_plan(plan)
+            ok, repair_errors = RepairSpecValidator().validate_task_plan(plan)
             if not ok:
-                raise DomainError(
-                    code="VALIDATION_FAILED",
-                    message="REPAIR task plan invalid",
-                    details={"errors": errors},
-                )
+                errors.extend(repair_errors)
 
-        scope = await session.execute(
-            select(ScopeSet)
-            .where(ScopeSet.delivery_cycle_id == cycle.id)
-            .order_by(ScopeSet.created_at.desc())
-            .limit(1)
-        )
-        scope_set = scope.scalar_one_or_none()
+        scope_set = (
+            await session.execute(
+                select(ScopeSet)
+                .where(ScopeSet.delivery_cycle_id == cycle.id)
+                .order_by(ScopeSet.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
         feature_spec_ids: list[uuid.UUID] = []
         if scope_set:
             items = await session.execute(
@@ -236,20 +308,71 @@ class TaskPlanService:
                     mandatory_ac.add(ac.lineage_key)
 
         policy = await ensure_policy_version(session)
-        max_tasks = int(policy.get("planning.max_tasks_per_plan", 12))
         report = self._validator.validate(
             plan,
-            specs_by_lineage,  # type: ignore[arg-type]
+            specs_by_lineage,
             mandatory_ac,
-            max_tasks=max_tasks,
+            max_tasks=int(policy.get("planning.max_tasks_per_plan", 12)),
         )
-        plan_row.validation_report = report.model_dump(mode="json")
-        if not report.ok:
+        errors.extend(report.errors)
+        return TaskPlanCheck(
+            plan=plan,
+            report=PlanValidationReport(ok=not errors, errors=errors),
+            implementation_spec_ids=impl_ids,
+            impl_by_lineage=impl_by_lineage,
+            ac_by_key=ac_by_key,
+            policy=policy,
+        )
+
+    async def accept(
+        self,
+        session: AsyncSession,
+        task_plan_id: uuid.UUID,
+        ctx: CommandContext,
+    ) -> TaskPlanRow:
+        from core.domain.delivery_cycles.models import DeliveryCycle
+
+        plan_row = await session.get(TaskPlanRow, task_plan_id)
+        if plan_row is None:
+            raise DomainError(code="NOT_FOUND", message="TaskPlan not found")
+        if plan_row.status != "PROPOSED":
+            raise DomainError(code="INVALID_STATE", message="TaskPlan must be PROPOSED")
+
+        subject_hash = sha256_hex(plan_row.body or {})
+        approved = await ApprovalService().is_satisfied(
+            session,
+            ApprovalType.TASK_PLAN,
+            "task_plan",
+            plan_row.id,
+            subject_hash,
+        )
+        if not approved:
+            raise DomainError(
+                code="APPROVAL_REQUIRED",
+                message="TASK_PLAN approval required before accept",
+            )
+
+        cycle = await session.get(DeliveryCycle, plan_row.delivery_cycle_id)
+        if cycle is None:
+            raise DomainError(code="NOT_FOUND", message="Delivery cycle not found")
+
+        check = await self.check_plan(
+            session,
+            cycle,
+            TaskPlan.model_validate(plan_row.body),
+            [uuid.UUID(i) for i in plan_row.implementation_spec_ids],
+        )
+        plan_row.validation_report = check.report.model_dump(mode="json")
+        if not check.report.ok:
             raise DomainError(
                 code="VALIDATION_FAILED",
                 message="TaskPlan validation failed",
-                details={"errors": report.errors},
+                details={"errors": check.report.errors},
             )
+        plan = check.plan
+        impl_by_lineage = check.impl_by_lineage
+        ac_by_key = check.ac_by_key
+        policy = check.policy
 
         task_origin = (
             TaskOrigin.REPAIR

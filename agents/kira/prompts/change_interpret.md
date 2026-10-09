@@ -1,7 +1,9 @@
 ---
 id: kira.change_interpret
-version: 2
+version: 3
 ---
+{{ decision_context }}
+
 You interpret a change request against an existing product model.
 
 ## Project

@@ -112,6 +112,14 @@ class BaselineService:
                 .limit(1)
             )
         ).scalar_one_or_none()
+        # Only a human ACTIVATE decision vouches for a baseline that rests on a known gap.
+        if activation == BaselineActivation.HUMAN:
+            bl.provisional = False
+            await session.flush()
+        elif cycle is not None:
+            from core.intelligence.baselines.provisional import apply_provisional_if_known_gap
+
+            await apply_provisional_if_known_gap(session, bl, cycle.id)
         await append_domain_event(
             session,
             aggregate_type="baseline",

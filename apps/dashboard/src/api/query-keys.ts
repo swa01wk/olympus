@@ -84,6 +84,9 @@ export const queryKeys = {
     defect: (defectId: string) => ["journey", "defect", defectId] as const,
     defectReproductions: (defectId: string) => ["journey", "defect-repro", defectId] as const,
     defectRootCause: (defectId: string) => ["journey", "defect-rca", defectId] as const,
+    expectedBehaviorReview: (resolutionId: string) =>
+      ["journey", "expected-behavior", resolutionId] as const,
+    baselines: (projectId: string) => ["journey", "baselines", projectId] as const,
     discovery: (cycleId: string) => ["journey", "discovery", cycleId] as const,
     observedBehaviors: (cycleId: string) => ["journey", "observed", cycleId] as const,
     recovery: (cycleId: string) => ["journey", "recovery", cycleId] as const,

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from typing import NoReturn
 
 from core.commands.context import CommandContext
+from core.domain.exceptions import DomainError
 from core.planning.architecture.service import ArchitectureService
 from core.planning.implementation_specs.service import ImplementationSpecService
 from core.planning.models import Architecture, ImplementationSpec, TaskPlanRow
 from core.planning.orchestrator import PlanningOrchestrator
-from core.planning.task_plans.service import TaskPlanService
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -209,8 +210,134 @@ async def accept_task_plan(
     session: AsyncSession = Depends(get_db),
     ctx: CommandContext = Depends(command_context),
 ) -> dict[str, object]:
-    row = await TaskPlanService().accept(session, plan_id, ctx)
+    from core.commands.handlers import handle_approval_decide
+    from core.domain.approvals.models import Approval
+    from core.domain.canonical_json import sha256_hex
+    from core.domain.enums import ActorKind, ActorRole, ApprovalStatus, ApprovalType
+    from core.domain.exceptions import Unauthorized
+
+    if ctx.actor.kind != ActorKind.HUMAN or ActorRole.APPROVER not in ctx.actor.roles:
+        raise Unauthorized("HUMAN approver required to accept task plan")
+    plan_row = await session.get(TaskPlanRow, plan_id)
+    if plan_row is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    subject_hash = sha256_hex(plan_row.body or {})
+    pending = (
+        await session.execute(
+            select(Approval).where(
+                Approval.approval_type == ApprovalType.TASK_PLAN,
+                Approval.subject_type == "task_plan",
+                Approval.subject_id == plan_id,
+                Approval.subject_hash == subject_hash,
+                Approval.status == ApprovalStatus.PENDING,
+            )
+        )
+    ).scalar_one_or_none()
+    if pending is None:
+        raise HTTPException(status_code=400, detail="No pending TASK_PLAN approval")
+    await handle_approval_decide(
+        session,
+        ctx,
+        {
+            "approval_id": str(pending.id),
+            "decision": ApprovalStatus.APPROVED.value,
+            "note": "Accepted via planning API",
+        },
+    )
+    row = await session.get(TaskPlanRow, plan_id)
+    assert row is not None
     return {"id": str(row.id), "status": row.status}
+
+
+class ArchitectureVersionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: dict[str, object]
+    contracts: list[dict[str, object]] | None = None
+    note: str | None = None
+    delivery_cycle_id: uuid.UUID
+
+
+class ImplementationSpecVersionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: dict[str, object]
+    note: str | None = None
+    delivery_cycle_id: uuid.UUID
+
+
+@router.post("/architectures/{architecture_id}/versions")
+async def post_architecture_version(
+    architecture_id: uuid.UUID,
+    payload: ArchitectureVersionBody,
+    session: AsyncSession = Depends(get_db),
+    ctx: CommandContext = Depends(command_context),
+) -> dict[str, object]:
+    from core.planning.schemas import ArchitectureBody, ContractDraft
+
+    try:
+        body = ArchitectureBody.model_validate(payload.body)
+        contracts = (
+            [ContractDraft.model_validate(c) for c in payload.contracts]
+            if payload.contracts is not None
+            else None
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=_validation_errors(exc)) from exc
+    try:
+        row = await ArchitectureService().create_edited_version(
+            session,
+            architecture_id=architecture_id,
+            body=body,
+            contracts=contracts,
+            note=payload.note,
+            delivery_cycle_id=payload.delivery_cycle_id,
+            ctx=ctx,
+        )
+    except DomainError as exc:
+        _raise_edit_error(exc, {"VALIDATION_FAILED"})
+    return {"id": str(row.id), "version": row.version, "status": row.status.value}
+
+
+@router.post("/implementation-specs/{spec_id}/versions")
+async def post_implementation_spec_version(
+    spec_id: uuid.UUID,
+    payload: ImplementationSpecVersionBody,
+    session: AsyncSession = Depends(get_db),
+    ctx: CommandContext = Depends(command_context),
+) -> dict[str, object]:
+    from core.planning.schemas import ImplementationSpecBody
+
+    try:
+        body = ImplementationSpecBody.model_validate(payload.body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=_validation_errors(exc)) from exc
+    try:
+        row = await ImplementationSpecService().create_edited_version(
+            session,
+            spec_id=spec_id,
+            body=body,
+            note=payload.note,
+            delivery_cycle_id=payload.delivery_cycle_id,
+            ctx=ctx,
+        )
+    except DomainError as exc:
+        _raise_edit_error(exc, {"VALIDATION_FAILED", "ARCHITECTURE_DELTA_REQUIRED"})
+    return {"id": str(row.id), "version": row.version, "status": row.status.value}
+
+
+def _validation_errors(exc: ValidationError) -> dict[str, object]:
+    return {
+        "errors": [f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in exc.errors()]
+    }
+
+
+def _raise_edit_error(exc: DomainError, validation_codes: set[str]) -> NoReturn:
+    if exc.code in validation_codes:
+        raise HTTPException(status_code=422, detail=exc.details or exc.message) from exc
+    if exc.code == "NOT_FOUND":
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    raise exc
 
 
 @router.get("/delivery-cycles/{cycle_id}/task-dag")

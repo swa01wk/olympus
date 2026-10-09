@@ -41,10 +41,13 @@ describe("requestChangesHelperText", () => {
     );
   });
 
-  it("EXPECTED_BEHAVIOR and unknown types do not revise", () => {
+  it("EXPECTED_BEHAVIOR revises on bug fix", () => {
     expect(text({ approvalType: "EXPECTED_BEHAVIOR", cycleType: "BUG_FIX" })).toBe(
-      REQUEST_CHANGES_NO_REVISION_HELPER,
+      REQUEST_CHANGES_AGENT_HELPER,
     );
+  });
+
+  it("unknown types do not revise", () => {
     expect(text({ approvalType: "SOMETHING_NEW" })).toBe(REQUEST_CHANGES_NO_REVISION_HELPER);
   });
 

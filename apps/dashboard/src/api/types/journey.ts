@@ -41,6 +41,50 @@ export type DefectDetail = {
   delivery_cycle_id: string | null;
 };
 
+export type ExpectedBehaviorReview = {
+  resolution_id: string;
+  classification: string;
+  statement: string;
+  proposed_ac: {
+    statement?: string;
+    given?: string;
+    when?: string;
+    then?: string;
+    lineage_key?: string;
+  } | null;
+  questions: string[];
+  cited_acceptance_criteria: {
+    lineage_key: string;
+    statement: string;
+    given: string | null;
+    when: string | null;
+    then: string | null;
+  }[];
+  contradicted_baselines: {
+    id: string;
+    lineage_key: string;
+    given: string;
+    when: string;
+    then: string;
+    status: string;
+  }[];
+  approval_id: string | null;
+};
+
+export type BehavioralBaselineSummary = {
+  id: string;
+  lineage_key: string;
+  version: number;
+  status: string;
+  source: string;
+  check_kind: string;
+  check_ref: string;
+  established_sha: string;
+  feature_spec_id: string | null;
+  provisional: boolean;
+  provisional_known_gaps: string[];
+};
+
 export type BrownfieldDiscovery = {
   id: string;
   repository_id: string;

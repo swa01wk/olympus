@@ -13,6 +13,7 @@ _ADMIN_PREFIXES = ("/auth/tokens", "/ops/")
 _APPROVE_PATTERNS = (
     re.compile(r"^/approvals/[^/]+/(approve|reject|decide|decision)", re.I),
     re.compile(r"/request-approval$"),
+    re.compile(r"^/task-plans/[^/]+/commands/accept$", re.I),
 )
 
 

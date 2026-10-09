@@ -1,7 +1,9 @@
 ---
 id: atlas.architecture_delta
-version: 2
+version: 3
 ---
+{{ decision_context }}
+
 # Architecture delta (Atlas)
 
 Propose a minimal architecture **delta** when the feature change requires new components, contracts, or decisions.

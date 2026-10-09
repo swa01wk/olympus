@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,7 @@ async def product_context_for_task(
         return {
             "project_name": None,
             "decision_items": [],
+            "decision_context": "",
             "approved_product_summary": "",
         }
 
@@ -70,11 +72,50 @@ async def product_context_for_task(
     n_specs = len(spec_count.all())
     summary = f"{n_caps} approved capabilities, {n_feats} features, {n_specs} feature specs"
 
+    decision_context = ""
+    if decision_items:
+        decision_context = "Prior decisions:\n" + "\n".join(f"- {d}" for d in decision_items)
+
     return {
         "project_name": project_name,
         "decision_items": decision_items,
+        "decision_context": decision_context,
         "approved_product_summary": summary,
     }
+
+
+async def protected_test_refs(session: AsyncSession, task: Task) -> list[str]:
+    """Test node ids that ACTIVE behavioural baselines of the task's project check."""
+    from core.intelligence.baselines.enums import BaselineCheckKind, BaselineStatus
+    from core.intelligence.baselines.models import BehavioralBaseline
+
+    cycle = await session.get(DeliveryCycle, task.delivery_cycle_id)
+    if cycle is None:
+        return []
+    refs = await session.scalars(
+        select(BehavioralBaseline.check_ref).where(
+            BehavioralBaseline.project_id == cycle.project_id,
+            BehavioralBaseline.status == BaselineStatus.ACTIVE,
+            BehavioralBaseline.check_kind.in_(
+                [BaselineCheckKind.EXISTING_TEST, BaselineCheckKind.AUTHORED_TEST]
+            ),
+        )
+    )
+    return sorted({r for r in refs if r})
+
+
+def missing_protected_tests(workspace: Path, refs: list[str]) -> list[str]:
+    """Protected pytest node ids (file::name) that are not in the worktree."""
+    missing: list[str] = []
+    for ref in refs:
+        rel, _, name = ref.partition("::")
+        target = workspace / rel
+        if not target.is_file():
+            missing.append(ref)
+            continue
+        if name and f"def {name}(" not in target.read_text(encoding="utf-8", errors="replace"):
+            missing.append(ref)
+    return missing
 
 
 async def _clarification_questions(

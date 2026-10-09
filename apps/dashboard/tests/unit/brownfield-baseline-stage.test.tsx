@@ -32,6 +32,7 @@ let queueItems: ReviewQueueItem[] = [queueItem];
 
 vi.mock("@/src/api/hooks/use-journey-queries", () => ({
   useReviewQueue: () => ({ data: queueItems, isLoading: false }),
+  useProjectBaselines: () => ({ data: [], isLoading: false }),
 }));
 
 function wrap(ui: React.ReactNode, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {

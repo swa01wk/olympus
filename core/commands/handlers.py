@@ -194,6 +194,20 @@ async def handle_approval_decide(
         payload.get("note"),
         ctx,
     )
+    from core.product_model.knowledge import KnowledgeService
+
+    if (
+        (approval.decision_note or "").strip()
+        and approval.status in {ApprovalStatus.APPROVED, ApprovalStatus.CHANGES_REQUESTED}
+        and approval.delivery_cycle_id is not None
+    ):
+        await KnowledgeService().create_decision_from_approval(
+            session,
+            project_id=approval.project_id,
+            delivery_cycle_id=approval.delivery_cycle_id,
+            approval=approval,
+            ctx=ctx,
+        )
     if approval.status == ApprovalStatus.CHANGES_REQUESTED:
         from core.review.service import RevisionService
 
@@ -250,6 +264,25 @@ async def handle_approval_decide(
         from core.assurance.findings import FindingService
 
         await FindingService().apply_waiver(session, approval.subject_id, approval.id, ctx)
+    elif (
+        approval.approval_type == ApprovalType.EXPECTED_BEHAVIOR
+        and approval.subject_type == "expected_behavior_resolution"
+        and approval.status == ApprovalStatus.APPROVED
+    ):
+        from core.product_model.defects.service import DefectService
+
+        await DefectService().on_expected_behavior_approved(session, approval.id, ctx)
+    elif (
+        approval.approval_type == ApprovalType.TASK_PLAN
+        and approval.subject_type == "task_plan"
+        and approval.status == ApprovalStatus.APPROVED
+    ):
+        from core.planning.models import TaskPlanRow
+        from core.planning.task_plans.service import TaskPlanService
+
+        plan_row = await session.get(TaskPlanRow, approval.subject_id)
+        if plan_row is not None:
+            await TaskPlanService().accept(session, plan_row.id, ctx)
     elif (
         approval.approval_type == ApprovalType.SPEC_DELTA
         and approval.status == ApprovalStatus.APPROVED

@@ -21,7 +21,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from tests.fixtures.planning_harness import (
     create_ticket_implementation_spec,
-    minimal_task_plan,
     supportdesk_architecture_proposal,
 )
 from tests.fixtures.planning_workflow_harness import (
@@ -256,9 +255,7 @@ async def test_kira_task_plan_persists_via_worker(
     operator_token,
     async_engine,
 ) -> None:
-    plan = minimal_task_plan()
     fake = FakeProvider()
-    fake.set_script([FakeScriptStep(structured=plan.model_dump(mode="json"))])
     fake_instance = fake
 
     def _providers(*, fake=None):
@@ -317,6 +314,7 @@ async def test_kira_task_plan_persists_via_worker(
         from core.domain.delivery_cycles.models import DeliveryCycle
         from core.domain.enums import ActorRole
         from tests.fixtures.planning_workflow_harness import (
+            build_task_plan_for_cycle,
             seed_approved_implementation_specs_for_cycle,
         )
 
@@ -330,7 +328,11 @@ async def test_kira_task_plan_persists_via_worker(
         await provision_greenfield_repository(session, cycle, ctx)
         cycle.state = "PLANNING"
         await session.flush()
-        await seed_approved_implementation_specs_for_cycle(session, uuid.UUID(cycle_id), ctx)
+        impl_specs = await seed_approved_implementation_specs_for_cycle(
+            session, uuid.UUID(cycle_id), ctx
+        )
+        plan = await build_task_plan_for_cycle(session, uuid.UUID(cycle_id), impl_specs)
+        fake.set_script([FakeScriptStep(structured=plan.model_dump(mode="json"))])
         started = await PlanningOrchestrator().start_task_plan_generation(
             session, uuid.UUID(cycle_id), ctx
         )

@@ -50,7 +50,6 @@ class PlanValidationService:
         obligations = await session.execute(
             select(VerificationObligation).where(
                 VerificationObligation.integration_candidate_id == ic_id,
-                VerificationObligation.required.is_(True),
             )
         )
         obl_by_key = {o.subject_key: o for o in obligations.scalars()}
@@ -70,6 +69,8 @@ class PlanValidationService:
             elif check.kind == "AUTHORED_TEST" and (not check.test_code or not check.test_filename):
                 errors.append("AUTHORED_TEST_INCOMPLETE")
         for key, obl in obl_by_key.items():
+            if not obl.required:
+                continue
             if key not in covered_keys and key not in plan.uncovered_obligations:
                 link = await session.execute(
                     select(SpecCodeLink).where(

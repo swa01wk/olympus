@@ -48,6 +48,7 @@ class SnapshotContent(BaseModel):
     implementation_spec_mode: str = ""
     parent_implementation_spec_json: str = ""
     impact_assessment_json: str = ""
+    protected_tests: list[str] = Field(default_factory=list)
 
 
 class ContinuationPackage(BaseModel):

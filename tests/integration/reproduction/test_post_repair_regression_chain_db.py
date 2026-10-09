@@ -19,6 +19,7 @@ from core.planning.schemas import AcCoverageEntry, TaskDraft, TaskPlan, TestRequ
 from core.planning.task_plans.service import TaskPlanService
 from core.product_model.defects.service import DefectService
 from sqlalchemy import select
+from tests.fixtures.approvals import approve_task_plan
 from tests.fixtures.brownfield_phase12_harness import ensure_human_approver
 from tests.fixtures.release_harness import integration_ic_after_start_integration
 from tests.journey.bug_fix_dev import (
@@ -134,7 +135,7 @@ async def test_post_repair_regression_chain_after_deterministic_repair(
         ctx=system_ctx,
     )
     plan = plan_row
-    await TaskPlanService().accept(db_session, plan.id, system_ctx)
+    await approve_task_plan(db_session, plan.id)
     await run_cycle_command(db_session, cycle_id, "start_development", "ROOT_CAUSE", system_ctx)
     await db_session.refresh(cycle)
     repo = await db_session.get(Repository, trusted.repository_id)

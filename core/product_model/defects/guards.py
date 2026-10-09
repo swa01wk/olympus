@@ -108,6 +108,10 @@ async def expected_behavior_resolved(
         return GuardResult(ok=False, reasons=("EXPECTED_BEHAVIOR_NOT_RESOLVED",))
     if row.classification == "NOT_A_DEFECT":
         return GuardResult(ok=False, reasons=("DEFECT_REJECTED",))
+    from core.product_model.defects.service import DefectService
+
+    if not await DefectService().expected_behavior_approval_satisfied(session, row):
+        return GuardResult(ok=False, reasons=("EXPECTED_BEHAVIOR_APPROVAL_PENDING",))
     return GuardResult(ok=True)
 
 

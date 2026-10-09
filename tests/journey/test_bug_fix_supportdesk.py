@@ -245,9 +245,8 @@ async def test_bug_fix_supportdesk_end_to_end(
         await wait_for_task_plan_proposed(factory, bf_cycle_id)
         await drain_workers_factory(factory, correlation_prefix="bf-task-plan")
         async with factory() as session, session.begin():
-            actor = await ensure_system_actor(session)
-            ctx = CommandContext(actor=actor, correlation_id="bf-accept-plan")
-            await accept_task_plan_if_proposed(session, bf_cycle_id, ctx)
+            _human, human_ctx = await ensure_human_approver(session)
+            await accept_task_plan_if_proposed(session, bf_cycle_id, human_ctx)
         await wait_for_task_plan_accepted(factory, bf_cycle_id)
 
         async with factory() as session, session.begin():

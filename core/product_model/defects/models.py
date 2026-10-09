@@ -94,6 +94,7 @@ class ExpectedBehaviorResolution(Base, UUIDPkMixin, TimestampMixin):
     classification: Mapped[str] = mapped_column(String(32))
     resolution_kind: Mapped[str] = mapped_column(String(32))
     ac_ids: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    contradicted_baseline_ids: Mapped[list[Any]] = mapped_column(JSONB, default=list)
     spec_delta_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("spec_deltas.id"), default=None
     )

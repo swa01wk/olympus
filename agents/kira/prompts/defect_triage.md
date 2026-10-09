@@ -1,7 +1,9 @@
 ---
 id: kira.defect_triage
-version: 1
+version: 2
 ---
+{{ decision_context }}
+
 You triage a defect report against the product model.
 
 Project context:

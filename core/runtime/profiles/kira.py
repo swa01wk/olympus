@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
 
 from agents.kira.schemas import (
@@ -130,6 +131,28 @@ def _build_kira_graph(deps: GraphDeps) -> Any:
     return graph.compile()
 
 
+async def _task_plan_errors(deps: GraphDeps, plan: TaskPlan) -> list[str]:
+    """The errors accept would raise for this plan in the execution's cycle."""
+    if deps.session is None:
+        return []
+    from core.domain.delivery_cycles.models import DeliveryCycle
+    from core.domain.exceptions import DomainError
+    from core.domain.executions.models import Execution
+    from core.planning.task_plans.service import TaskPlanService
+
+    execution = await deps.session.get(Execution, deps.request.run_id)
+    cycle = (
+        await deps.session.get(DeliveryCycle, execution.delivery_cycle_id) if execution else None
+    )
+    if cycle is None:
+        return []
+    try:
+        check = await TaskPlanService().check_plan(deps.session, cycle, plan, [])
+    except DomainError:
+        return []
+    return check.report.errors
+
+
 def _build_kira_planning_graph(
     deps: GraphDeps,
     *,
@@ -137,6 +160,7 @@ def _build_kira_planning_graph(
     prompt_path: str,
     output_schema: type[Any],
     template_keys: dict[str, str],
+    validate: Callable[[GraphDeps, Any], Awaitable[list[str]]] | None = None,
 ) -> Any:
     from langgraph.graph import END, StateGraph
 
@@ -146,26 +170,45 @@ def _build_kira_planning_graph(
         values: dict[str, object] = {
             tpl: str(snap.get(snap_key, "")) for tpl, snap_key in template_keys.items()
         }
-        values.update(_revision_vars(snap))
-        system = render_prompt(template, values)
-        result = await deps.model_router.invoke(
-            ModelRequest(
-                purpose=purpose,
-                alias=deps.profile.model_alias,
-                system_instructions=system,
-                context=list(deps.request.context),
-                output_schema=output_schema,
-                tools=[],
-                metadata={
-                    "agent_profile": deps.profile.name,
-                    "execution_id": str(deps.request.run_id),
-                },
+        decision_context = str(snap.get("decision_context") or "")
+        if not decision_context:
+            decisions = snap.get("decision_items") or []
+            if decisions:
+                decision_context = "Prior decisions:\n" + "\n".join(f"- {d}" for d in decisions)
+        values["decision_context"] = decision_context
+
+        async def call(revision: dict[str, str], call_purpose: str) -> Any:
+            system = render_prompt(template, {**values, **revision})
+            result = await deps.model_router.invoke(
+                ModelRequest(
+                    purpose=call_purpose,
+                    alias=deps.profile.model_alias,
+                    system_instructions=system,
+                    context=list(deps.request.context),
+                    output_schema=output_schema,
+                    tools=[],
+                    metadata={
+                        "agent_profile": deps.profile.name,
+                        "execution_id": str(deps.request.run_id),
+                    },
+                )
             )
-        )
-        deps.model_call_ids.append(result.model_call_id)
-        if result.parsed_output is None:
-            raise ValueError(f"{purpose} did not return structured output")
-        parsed = output_schema.model_validate(result.parsed_output.model_dump())
+            deps.model_call_ids.append(result.model_call_id)
+            if result.parsed_output is None:
+                raise ValueError(f"{call_purpose} did not return structured output")
+            return output_schema.model_validate(result.parsed_output.model_dump())
+
+        parsed = await call(_revision_vars(snap), purpose)
+        # One repair pass; output that is still invalid is rejected downstream by the same check.
+        errors = await validate(deps, parsed) if validate is not None else []
+        if errors:
+            parsed = await call(
+                {
+                    "revision_feedback": _validation_repair_note(errors),
+                    "previous_output_json": parsed.model_dump_json(),
+                },
+                f"{purpose}.repair",
+            )
         return {"output": parsed.model_dump(mode="json")}
 
     graph = StateGraph(_KiraState)
@@ -284,6 +327,7 @@ def register_kira_profile() -> None:
                     "mandatory_ac_keys": "mandatory_ac_keys",
                     "repo_listing": "repo_listing",
                 },
+                validate=_task_plan_errors,
             )
 
         register_profile(
@@ -338,6 +382,7 @@ def register_kira_profile() -> None:
                     "defect_description": "defect_description",
                     "triage_json": "triage_json",
                     "approved_acs_json": "approved_acs_json",
+                    "decision_context": "decision_context",
                 },
             )
 

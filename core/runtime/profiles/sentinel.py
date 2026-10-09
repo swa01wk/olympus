@@ -34,11 +34,17 @@ def _build_sentinel_plan_graph(deps: GraphDeps) -> Any:
     async def plan_node(state: _SentinelState) -> _SentinelState:
         template = load_prompt("agents/sentinel/prompts/plan.md")
         snap = deps.request.snapshot or {}
+        decision_context = str(snap.get("decision_context") or "")
+        if not decision_context:
+            decisions = snap.get("decision_items") or []
+            if decisions:
+                decision_context = "Prior decisions:\n" + "\n".join(f"- {d}" for d in decisions)
         system = render_prompt(
             template,
             {
                 "obligations_json": json.dumps(snap.get("obligations") or [], indent=2),
                 "tests_json": json.dumps(snap.get("tests") or [], indent=2),
+                "decision_context": decision_context,
             },
         )
         result = await deps.model_router.invoke(

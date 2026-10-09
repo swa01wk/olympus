@@ -38,10 +38,16 @@ def _tool_specs(profile: AgentProfile) -> list[ToolSpec]:
     return specs
 
 
-async def _implementation_result_from_candidate_commit(
-    deps: GraphDeps,
-    contract: TaskContractBody | None,
-) -> dict[str, Any] | None:
+_MAX_COMMIT_NUDGES = 3
+_MAX_SCHEMA_FAILURES = 2
+_NO_COMMIT_NOTE = (
+    "tool:submit_structured_output=>rejected: no candidate commit exists for this execution. "
+    "Make the required changes within allowed_scope, run test.run, then call git.commit "
+    "before submitting the ImplementationResult again."
+)
+
+
+async def _candidate_commit(deps: GraphDeps) -> Any | None:
     if deps.session is None:
         return None
     from sqlalchemy import select
@@ -52,7 +58,14 @@ async def _implementation_result_from_candidate_commit(
     cc_row = await deps.session.execute(
         select(CandidateCommit).where(CandidateCommit.execution_id == deps.request.run_id)
     )
-    cc = cc_row.scalar_one_or_none()
+    return cc_row.scalar_one_or_none()
+
+
+async def _implementation_result_from_candidate_commit(
+    deps: GraphDeps,
+    contract: TaskContractBody | None,
+) -> dict[str, Any] | None:
+    cc = await _candidate_commit(deps)
     if cc is None:
         return None
     paths = [
@@ -78,16 +91,27 @@ def _build_forge_graph(deps: GraphDeps) -> Any:
         if contract is None:
             raise ValueError("TaskContract required for forge")
         template = load_prompt("agents/forge/prompts/implement.md")
+        snap = deps.request.snapshot or {}
+        decision_context = str(snap.get("decision_context") or "")
+        if not decision_context:
+            decisions = snap.get("decision_items") or []
+            if decisions:
+                decision_context = "Prior decisions:\n" + "\n".join(f"- {d}" for d in decisions)
         system = render_prompt(
             template,
             {
                 "objective": contract.objective,
                 "allowed_scope": ", ".join(contract.allowed_scope),
                 "constraints": "; ".join(contract.constraints),
+                "decision_context": decision_context,
+                "protected_tests": "\n".join(f"- {t}" for t in snap.get("protected_tests") or [])
+                or "(none)",
             },
         )
         messages = list(state.get("messages", []))
         step = 0
+        commit_nudges = 0
+        schema_failures = 0
         output: dict[str, Any] | None = None
         meta = {
             "agent_profile": deps.profile.name,
@@ -97,25 +121,34 @@ def _build_forge_graph(deps: GraphDeps) -> Any:
         while step < deps.profile.max_steps and output is None:
             step += 1
             context_text = "\n".join(messages)
-            result = await deps.model_router.invoke(
-                ModelRequest(
-                    purpose="forge.implement",
-                    alias=deps.profile.model_alias,
-                    system_instructions=system,
-                    context=[
-                        ContextItem(kind="TEXT", content=context_text, provenance="AGENT"),
-                    ],
-                    output_schema=ImplementationResult,
-                    tools=_tool_specs(deps.profile),
-                    metadata=meta,
+            try:
+                result = await deps.model_router.invoke(
+                    ModelRequest(
+                        purpose="forge.implement",
+                        alias=deps.profile.model_alias,
+                        system_instructions=system,
+                        context=[
+                            ContextItem(kind="TEXT", content=context_text, provenance="AGENT"),
+                        ],
+                        output_schema=ImplementationResult,
+                        tools=_tool_specs(deps.profile),
+                        metadata=meta,
+                    )
                 )
-            )
+            except SchemaValidationFailed as exc:
+                schema_failures += 1
+                errors = exc.details.get("errors")
+                messages.append(f"tool:submit_structured_output=>invalid schema: {errors}")
+                if schema_failures >= _MAX_SCHEMA_FAILURES:
+                    break
+                continue
             deps.model_call_ids.append(result.model_call_id)
+            submitted: dict[str, Any] | None = None
             if result.tool_calls:
                 for call in result.tool_calls:
                     if call.name == STRUCTURED_OUTPUT_TOOL:
                         try:
-                            output = ImplementationResult.model_validate(
+                            submitted = ImplementationResult.model_validate(
                                 call.arguments
                             ).model_dump()
                         except Exception:
@@ -139,12 +172,19 @@ def _build_forge_graph(deps: GraphDeps) -> Any:
                             "step": step,
                             "model_call_ids": [str(x) for x in deps.model_call_ids],
                         }
-                if output is not None:
-                    break
+            elif result.parsed_output is not None:
+                submitted = result.parsed_output.model_dump()
+            if submitted is None:
                 continue
-            if result.parsed_output is not None:
-                output = result.parsed_output.model_dump()
-                break
+            if (
+                deps.session is not None
+                and commit_nudges < _MAX_COMMIT_NUDGES
+                and await _candidate_commit(deps) is None
+            ):
+                commit_nudges += 1
+                messages.append(_NO_COMMIT_NOTE)
+                continue
+            output = submitted
         if output is None and messages:
             try:
                 finalize = await deps.model_router.invoke(

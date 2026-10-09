@@ -24,6 +24,8 @@ import {
 import { fetchAuditForTarget } from "@/src/api/resources";
 import type { InboxApprovalNested, InboxItem, TransitionPreview } from "@/src/api/types/core";
 import type { DeliveryCycleType } from "@/src/control-plane/stage-lanes";
+import { ExpectedBehaviorDecisionPreview } from "@/components/studio/decision/ExpectedBehaviorDecisionPreview";
+import { TaskPlanDecisionPreview } from "@/components/studio/decision/TaskPlanDecisionPreview";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -69,12 +71,22 @@ function ApprovalSubjectPreview({
 }) {
   const isArch = isArchitectureApproval(approvalType);
   const isRelease = approvalType === "RELEASE";
+  const isExpectedBehavior =
+    approvalType === "EXPECTED_BEHAVIOR" && subjectType === "expected_behavior_resolution";
+  const isTaskPlan = approvalType === "TASK_PLAN" && subjectType === "task_plan";
   const isSpec =
     subjectType.toLowerCase().includes("spec") || approvalType === "SCOPE" || approvalType.includes("SPEC");
 
   const architecture = useProjectArchitecture(isArch ? projectId : undefined);
   const spec = useFeatureSpecDetail(isSpec ? subjectId : undefined);
   const manifest = useReleaseManifest(isRelease ? subjectId : undefined);
+
+  if (isExpectedBehavior) {
+    return <ExpectedBehaviorDecisionPreview resolutionId={subjectId} />;
+  }
+  if (isTaskPlan) {
+    return <TaskPlanDecisionPreview planId={subjectId} />;
+  }
 
   if (isArch && architecture.data) {
     return (

@@ -14,8 +14,18 @@ from core.integration.enums import SpecCodeLinkRelation
 from core.integration.models import IntegrationCandidate
 from core.intelligence.baselines.authored import load_authored_test
 from core.intelligence.baselines.models import BehavioralBaseline
+from core.intelligence.code_index.enums import EntityType
 from core.intelligence.code_index.models import CodeEntity, CodeIndexVersion
 from core.traceability.models import SpecCodeLink
+
+
+def resolve_existing_test_node(desired: str, test_nodes: set[str]) -> str | None:
+    """Keep the planned node if it exists; otherwise another test in the same file."""
+    if desired in test_nodes:
+        return desired
+    file_part = desired.split("::", 1)[0]
+    same = sorted(n for n in test_nodes if n.startswith(f"{file_part}::"))
+    return same[0] if same else None
 
 
 def _pytest_node_from_test_subject_key(subject_key: str) -> str | None:
@@ -48,6 +58,15 @@ async def build_plan_from_verifies_links(
         select(CodeEntity).where(CodeEntity.index_version_id == version.id)
     )
     entity_by_key = {e.stable_key: e for e in entities.scalars()}
+    test_nodes: set[str] = set()
+    for indexed in entity_by_key.values():
+        if indexed.type != EntityType.TEST:
+            continue
+        node = pytest_node_id_for_entity(indexed)
+        if node:
+            test_nodes.add(node)
+        if indexed.qualified_name:
+            test_nodes.add(indexed.qualified_name)
     checks: list[PlannedCheck] = []
     uncovered: list[str] = []
     for obl in obligations.scalars():
@@ -78,11 +97,16 @@ async def build_plan_from_verifies_links(
                 baseline_node = ref
             else:
                 baseline_node = ref
+            resolved = resolve_existing_test_node(baseline_node, test_nodes)
+            if resolved is None:
+                if obl.required:
+                    uncovered.append(obl.subject_key)
+                continue
             checks.append(
                 PlannedCheck(
                     obligation_key=obl.subject_key,
                     kind="EXISTING_TEST",
-                    test_node_id=baseline_node,
+                    test_node_id=resolved,
                     rationale="baseline check_ref",
                 )
             )
@@ -93,11 +117,16 @@ async def build_plan_from_verifies_links(
                 if obl.required:
                     uncovered.append(obl.subject_key)
                 continue
+            resolved = resolve_existing_test_node(test_node, test_nodes)
+            if resolved is None:
+                if obl.required:
+                    uncovered.append(obl.subject_key)
+                continue
             checks.append(
                 PlannedCheck(
                     obligation_key=obl.subject_key,
                     kind="EXISTING_TEST",
-                    test_node_id=test_node,
+                    test_node_id=resolved,
                     rationale="impact-selected test",
                 )
             )
@@ -122,7 +151,7 @@ async def build_plan_from_verifies_links(
             if obl.required:
                 uncovered.append(obl.subject_key)
             continue
-        entity = entity_by_key.get(link.code_stable_key)
+        entity: CodeEntity | None = entity_by_key.get(link.code_stable_key)
         ac_node = pytest_node_id_for_entity(entity) if entity else None
         if not ac_node:
             if obl.required:

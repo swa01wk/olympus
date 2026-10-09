@@ -849,8 +849,10 @@ async def maybe_complete_expected_behavior_and_root_cause(
             agent_profile="kira.expected_behavior",
         )
         await maybe_apply_expected_behavior_fallback(session, cycle_id, ctx)
-        cycle = await session.get(DeliveryCycle, cycle_id)
-    if cycle is not None and cycle.state == "ROOT_CAUSE":
+        # start_root_cause just queued the live warden.root_cause task; a fallback RCA now would
+        # be a second RCA once that task runs.
+        return
+    if cycle.state == "ROOT_CAUSE":
         await _ensure_stub_execution_for_control_plane_task(
             session,
             cycle_id,
@@ -858,6 +860,38 @@ async def maybe_complete_expected_behavior_and_root_cause(
             agent_profile="warden.root_cause",
         )
         await maybe_apply_root_cause_fallback(session, cycle_id, ctx)
+
+
+async def approve_expected_behavior_if_pending(
+    session: AsyncSession,
+    cycle_id: uuid.UUID,
+    human_ctx: CommandContext,
+) -> bool:
+    from core.commands.handlers import handle_approval_decide
+    from core.domain.approvals.models import Approval
+    from core.domain.enums import ApprovalType
+
+    defect = await DefectService().get_by_cycle(session, cycle_id)
+    if defect is None:
+        return False
+    row = await DefectService().latest_expected_behavior_resolution(session, defect.id)
+    if row is None or row.approval_id is None:
+        return False
+    approval = await session.get(Approval, row.approval_id)
+    if approval is None or approval.status != ApprovalStatus.PENDING:
+        return False
+    if approval.approval_type != ApprovalType.EXPECTED_BEHAVIOR:
+        return False
+    await handle_approval_decide(
+        session,
+        human_ctx,
+        {
+            "approval_id": str(approval.id),
+            "decision": ApprovalStatus.APPROVED.value,
+            "note": "journey expected behavior",
+        },
+    )
+    return True
 
 
 async def maybe_apply_expected_behavior_fallback(
@@ -879,7 +913,14 @@ async def maybe_apply_expected_behavior_fallback(
         )
     ).scalar_one_or_none()
     if existing is not None:
-        return False
+        from tests.fixtures.brownfield_phase12_harness import ensure_human_approver
+
+        _human, human_ctx = await ensure_human_approver(session)
+        await approve_expected_behavior_if_pending(session, cycle_id, human_ctx)
+        cycle = await session.get(DeliveryCycle, cycle_id)
+        if cycle is not None and cycle.state == "EXPECTED_BEHAVIOR":
+            await run_cycle_command(session, cycle_id, "start_root_cause", "EXPECTED_BEHAVIOR", ctx)
+        return True
     execution_id = await _latest_execution_id_for_profile(
         session, cycle_id, "kira.expected_behavior"
     )
@@ -893,7 +934,13 @@ async def maybe_apply_expected_behavior_fallback(
         ),
     )
     await DefectService().persist_expected_behavior(session, cycle_id, proposal, execution_id, ctx)
-    await run_cycle_command(session, cycle_id, "start_root_cause", "EXPECTED_BEHAVIOR", ctx)
+    from tests.fixtures.brownfield_phase12_harness import ensure_human_approver
+
+    _human, human_ctx = await ensure_human_approver(session)
+    await approve_expected_behavior_if_pending(session, cycle_id, human_ctx)
+    cycle = await session.get(DeliveryCycle, cycle_id)
+    if cycle is not None and cycle.state == "EXPECTED_BEHAVIOR":
+        await run_cycle_command(session, cycle_id, "start_root_cause", "EXPECTED_BEHAVIOR", ctx)
     return True
 
 
@@ -1239,7 +1286,10 @@ async def finish_bug_fix_assurance_and_release_for_cycle(
     scope_ok = await scope_approved(session, cycle, None)
     if not scope_ok.ok:
         specs = await session.execute(
-            select(FeatureSpec).where(FeatureSpec.project_id == cycle.project_id)
+            select(FeatureSpec).where(
+                FeatureSpec.project_id == cycle.project_id,
+                FeatureSpec.status == SpecStatus.APPROVED,
+            )
         )
         fs = specs.scalars().first()
         assert fs is not None

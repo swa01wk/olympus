@@ -3,11 +3,13 @@
 import { EmptyState, Panel, StatusBadge } from "@/components/primitives";
 import { TaskDag } from "@/components/tasks/TaskDag";
 import { ExceptionState } from "@/components/truth/ExceptionState";
+import { ImplementationSpecVersionEditor } from "@/components/studio/editors/ImplementationSpecVersionEditor";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
 import { StudioMutationAction } from "@/components/studio/workspace/StudioMutationAction";
+import { fetchImplementationSpec } from "@/src/api/resources";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTaskDagView } from "@/src/api/hooks/use-drill-queries";
 import {
-  useAcceptTaskPlan,
   useGenerateImplementationSpecs,
   useGenerateTaskPlan,
   useRequestImplementationSpecApproval,
@@ -18,7 +20,6 @@ import {
   useTaskPlans,
 } from "@/src/api/hooks/use-studio-queries";
 import {
-  acceptTaskPlan,
   generateImplementationSpecs,
   generateTaskPlan,
   requestImplementationSpecApproval,
@@ -35,7 +36,6 @@ export function PlanningStage({ projectId, cycleId }: { projectId: string; cycle
   const features = useFeatures(projectId);
   const genImpl = useGenerateImplementationSpecs(scope);
   const genPlan = useGenerateTaskPlan(scope);
-  const acceptPlan = useAcceptTaskPlan(scope);
   const plans = useTaskPlans(cycleId);
   const dagView = useTaskDagView(cycleId);
   const latestPlan = plans.data?.[0];
@@ -115,12 +115,6 @@ export function PlanningStage({ projectId, cycleId }: { projectId: string; cycle
                 <span className="ol-id">{p.id.slice(0, 8)}</span>
                 <StatusBadge status={p.status} />
                 <span className="ol-body-sm ol-muted">{p.task_count} tasks</span>
-                <StudioMutationAction
-                  label="Accept plan"
-                  path={`/task-plans/${p.id}/commands/accept`}
-                  disabled={acceptPlan.isPending}
-                  onRun={(idem) => acceptTaskPlan(p.id, idem)}
-                />
               </li>
             ))}
           </ul>
@@ -164,7 +158,8 @@ export function PlanningStage({ projectId, cycleId }: { projectId: string; cycle
           )}
           {latestPlan && (
             <p className="ol-body-sm ol-muted mt-2">
-              Latest plan status: <StatusBadge status={latestPlan.status} />
+              Latest plan status: <StatusBadge status={latestPlan.status} /> — approve{" "}
+              <code>TASK_PLAN</code> in the Decision panel to accept and issue contracts.
             </p>
           )}
         </Panel>
@@ -191,6 +186,13 @@ function FeatureImplSpecs({
   void scope.projectId;
   const specs = useImplementationSpecs(featureId);
   const requestApproval = useRequestImplementationSpecApproval(scope);
+  const queryClient = useQueryClient();
+  const focused = (specs.data ?? []).find((s) => s.id === focusSpecId);
+  const focusedDetail = useQuery({
+    queryKey: ["implementation-spec", focusSpecId],
+    queryFn: () => fetchImplementationSpec(focusSpecId!),
+    enabled: Boolean(focusSpecId && focused?.status === "PROPOSED"),
+  });
 
   return (
     <div className="ol-ws-impl-block">
@@ -221,6 +223,21 @@ function FeatureImplSpecs({
           </li>
         ))}
       </ul>
+      {focused?.status === "PROPOSED" && focusedDetail.data && (
+        <ImplementationSpecVersionEditor
+          title={`Edit implementation spec (${featureKey})`}
+          spec={focusedDetail.data}
+          featureId={featureId}
+          cycleId={cycleId}
+          onSaved={async (newSpecId) => {
+            await queryClient.prefetchQuery({
+              queryKey: ["implementation-spec", newSpecId],
+              queryFn: () => fetchImplementationSpec(newSpecId),
+            });
+            onFocusSpec(newSpecId);
+          }}
+        />
+      )}
     </div>
   );
 }

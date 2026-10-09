@@ -31,7 +31,7 @@ class DependencyBaseResolver:
             select(TaskDependency).where(TaskDependency.task_id == task.id)
         )
         dep_ids = [d.depends_on_task_id for d in deps.scalars()]
-        if len(dep_ids) < 2:
+        if not dep_ids:
             raise ValueError("BASE_RESOLVER_UNAVAILABLE")
         shas: list[str] = []
         for dep_id in sorted(dep_ids, key=str):
@@ -48,6 +48,14 @@ class DependencyBaseResolver:
             if commit is None:
                 raise ValueError(f"DEPENDENCY_INCOMPLETE:{dep_id}")
             shas.append(commit.sha)
+        if len(shas) == 1:
+            return BaseResolution(
+                policy="DEPENDENCY_INTEGRATION",
+                base_commit=shas[0],
+                commit_available=True,
+                inputs={"policy": "DEPENDENCY_INTEGRATION", "shas": shas},
+                repository={"repository_id": str(repository_id)},
+            )
         cycle = await session.get(DeliveryCycle, task.delivery_cycle_id)
         if cycle is None or cycle.repository_id is None:
             raise ValueError("BASE_COMMIT_UNAVAILABLE")

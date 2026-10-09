@@ -7,11 +7,13 @@ def normalize_pattern(pattern: str) -> str:
     p = pattern.strip().replace("\\", "/")
     while p.startswith("./"):
         p = p[2:]
+    if p.endswith("/**/*.py"):
+        p = p[: -len("/**/*.py")] + "/*.py"
     return p
 
 
 def pattern_allowed(pattern: str) -> bool:
-    """Only prefix-style globs: exact path, dir/**, dir/*.py."""
+    """Only prefix-style globs: exact path, dir/**, dir/*.py (recursive; dir/**/*.py alias)."""
     p = normalize_pattern(pattern)
     if not p or "**/" in p[2:] or p.count("**") > 1:
         return False

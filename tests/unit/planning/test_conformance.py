@@ -31,6 +31,15 @@ def test_conformance_passes_for_valid_draft() -> None:
     assert report.ok
 
 
+def test_conformance_accepts_recursive_py_file_scope() -> None:
+    proposal = supportdesk_architecture_proposal()
+    draft = create_ticket_implementation_spec().body.model_copy(
+        update={"file_scope": ["app/api/**/*.py", "tests/**/*.py"]}
+    )
+    report = ArchitectureConformanceValidator().validate(draft, proposal.body, [])
+    assert "invalid file_scope pattern" not in " ".join(report.violations)
+
+
 def test_conformance_rejects_unknown_component() -> None:
     proposal = supportdesk_architecture_proposal()
     draft = ImplementationSpecBody(

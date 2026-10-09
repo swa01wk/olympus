@@ -26,8 +26,10 @@ import type {
   ChangeInterpretation,
   ChangeRequestSummary,
   CycleSpecDelta,
+  BehavioralBaselineSummary,
   DefectDetail,
   DefectSummary,
+  ExpectedBehaviorReview,
   ObservedBehavior,
   ReadinessAssessment,
   CycleFinding,
@@ -279,6 +281,26 @@ export function listDefectReproductions(defectId: string) {
 
 export function getDefectRootCause(defectId: string) {
   return apiRequest<Record<string, unknown>>(`/defects/${defectId}/root-cause`);
+}
+
+export function getExpectedBehaviorReview(resolutionId: string) {
+  return apiRequest<ExpectedBehaviorReview>(
+    `/expected-behavior-resolutions/${resolutionId}/review`,
+  );
+}
+
+export function listProjectBaselines(projectId: string) {
+  return apiRequest<BehavioralBaselineSummary[]>(`/projects/${projectId}/baselines`);
+}
+
+export function fetchImplementationSpec(specId: string) {
+  return apiRequest<{
+    id: string;
+    version: number;
+    status: string;
+    kind: string;
+    body: Record<string, unknown>;
+  }>(`/implementation-specs/${specId}`);
 }
 
 export function getBrownfieldDiscovery(cycleId: string) {

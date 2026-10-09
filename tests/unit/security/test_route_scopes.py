@@ -22,3 +22,7 @@ def test_post_requires_operate() -> None:
 
 def test_admin_tokens() -> None:
     assert required_scope(_req("POST", "/auth/tokens")) == "admin"
+
+
+def test_task_plan_accept_requires_approve() -> None:
+    assert required_scope(_req("POST", "/task-plans/tp-1/commands/accept")) == "approve"

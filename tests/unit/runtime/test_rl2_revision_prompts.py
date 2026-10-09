@@ -18,7 +18,11 @@ from core.runtime.tool_client import DenyAllToolGateway
 
 pytestmark = pytest.mark.unit
 
-_REVISION_KEYS = {"revision_feedback": "", "previous_output_json": ""}
+_REVISION_KEYS = {
+    "revision_feedback": "",
+    "previous_output_json": "",
+    "decision_context": "",
+}
 _REVISION_ACTIVE = {
     "revision_feedback": "Use one guard for archive.",
     "previous_output_json": '{"decisions": []}',
@@ -41,6 +45,7 @@ _KIRA_PROMPTS: list[tuple[str, dict[str, str]]] = [
             "change_request_text": "change",
             "candidate_features_json": "[]",
             "architecture_summary": "{}",
+            "decision_context": "",
         },
     ),
     (
@@ -51,6 +56,7 @@ _KIRA_PROMPTS: list[tuple[str, dict[str, str]]] = [
             "architecture_summary": "{}",
             "feature_spec_body": "{}",
             "acceptance_criteria": "[]",
+            "decision_context": "",
         },
     ),
     (
@@ -63,6 +69,7 @@ _KIRA_PROMPTS: list[tuple[str, dict[str, str]]] = [
             "architecture_summary": "{}",
             "parent_implementation_spec_json": "{}",
             "impact_assessment_json": "[]",
+            "decision_context": "",
         },
     ),
     (
@@ -77,6 +84,7 @@ _KIRA_PROMPTS: list[tuple[str, dict[str, str]]] = [
             "expected_ac_keys": "AC-1",
             "reproduction_artifact_ref": "art",
             "max_repair_files": "3",
+            "decision_context": "",
         },
     ),
     (
@@ -86,6 +94,7 @@ _KIRA_PROMPTS: list[tuple[str, dict[str, str]]] = [
             "implementation_specs_json": "[]",
             "mandatory_ac_keys": "AC-1",
             "repo_listing": "app/",
+            "decision_context": "",
         },
     ),
 ]
@@ -98,6 +107,7 @@ _ATLAS_PROMPTS: list[tuple[str, dict[str, str]]] = [
             "approved_product_summary": "summary",
             "feature_specs_json": "[]",
             "technology_constraints": "",
+            "decision_context": "",
         },
     ),
     (
@@ -106,6 +116,7 @@ _ATLAS_PROMPTS: list[tuple[str, dict[str, str]]] = [
             "project_name": "p",
             "architecture_summary": "{}",
             "impact_summary": "impact",
+            "decision_context": "",
         },
     ),
 ]

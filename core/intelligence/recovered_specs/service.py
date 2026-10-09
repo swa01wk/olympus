@@ -219,7 +219,11 @@ class RecoveryService:
                     delivery_cycle_id=delivery_cycle_id,
                     knowledge_class=KnowledgeClass.UNCERTAINTY,
                     statement=unc.question,
-                    provenance={"origin": "SCOUT", "why": unc.why_uncertain},
+                    provenance={
+                        "origin": "SCOUT",
+                        "why": unc.why_uncertain,
+                        "citations": [c.model_dump() for c in unc.citations],
+                    },
                     status=KnowledgeItemStatus.ACTIVE,
                     blocking=unc.blocking_suggested,
                 )

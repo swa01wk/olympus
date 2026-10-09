@@ -84,6 +84,7 @@ vi.mock("@/src/api/hooks/use-journey-queries", () => ({
     data: [openBlocker, waived, openNonBlocking, openPendingWaiver],
     isLoading: false,
   }),
+  useProjectBaselines: () => ({ data: [], isLoading: false }),
 }));
 
 function wrap(ui: React.ReactNode) {

@@ -5,7 +5,6 @@ import uuid
 
 from agents.atlas.schemas import ArchitectureProposal
 from agents.kira.schemas import ImplementationSpecDraft, TaskPlan
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.commands.context import CommandContext
@@ -172,7 +171,6 @@ class PlanningCompletionService:
             from core.domain.delivery_cycles.models import DeliveryCycle
             from core.domain.enums import DeliveryCycleType, SpecStatus
             from core.planning.implementation_specs.delta import ImplementationSpecDeltaService
-            from core.planning.models import ImplementationSpec
             from core.product_model.models import FeatureSpec
 
             spec = await session.get(FeatureSpec, task.governing_ref_id)
@@ -250,9 +248,6 @@ class PlanningCompletionService:
             await complete_revision_if_needed(session, execution, impl_row.id, ctx)
         elif contract_profile == "kira.task_plan":
             from core.domain.delivery_cycles.models import DeliveryCycle
-            from core.domain.enums import DeliveryCycleType, SpecStatus
-            from core.planning.models import ImplementationSpec
-            from core.product_model.models import ScopeSet, ScopeSetItem
 
             plan = TaskPlan.model_validate(output)
             raw_ids = output.get("_implementation_spec_ids")
@@ -261,46 +256,13 @@ class PlanningCompletionService:
                 impl_ids = [uuid.UUID(str(i)) for i in raw_ids]
             if not impl_ids:
                 cycle = await session.get(DeliveryCycle, execution.delivery_cycle_id)
-                if cycle and cycle.type == DeliveryCycleType.BUG_FIX:
-                    repair_lookup = await session.execute(
-                        select(ImplementationSpec.id)
-                        .where(
-                            ImplementationSpec.project_id == cycle.project_id,
-                            ImplementationSpec.kind == "REPAIR",
-                            ImplementationSpec.status == SpecStatus.APPROVED,
+                if cycle is not None:
+                    impl_ids = [
+                        r.id
+                        for r in await TaskPlanService().implementation_specs_for_cycle(
+                            session, cycle
                         )
-                        .order_by(ImplementationSpec.version.desc())
-                        .limit(1)
-                    )
-                    repair_id = repair_lookup.scalar_one_or_none()
-                    if repair_id is not None:
-                        impl_ids.append(repair_id)
-            if not impl_ids:
-                cycle = await session.get(DeliveryCycle, execution.delivery_cycle_id)
-                if cycle:
-                    scope = await session.execute(
-                        select(ScopeSet)
-                        .where(ScopeSet.delivery_cycle_id == cycle.id)
-                        .order_by(ScopeSet.created_at.desc())
-                        .limit(1)
-                    )
-                    scope_set = scope.scalar_one_or_none()
-                    if scope_set:
-                        items = await session.execute(
-                            select(ScopeSetItem).where(ScopeSetItem.scope_set_id == scope_set.id)
-                        )
-                        for item in items.scalars():
-                            impl_lookup = await session.execute(
-                                select(ImplementationSpec.id)
-                                .where(
-                                    ImplementationSpec.feature_spec_id == item.feature_spec_id,
-                                    ImplementationSpec.status == SpecStatus.APPROVED,
-                                )
-                                .limit(1)
-                            )
-                            impl_id = impl_lookup.scalar_one_or_none()
-                            if impl_id:
-                                impl_ids.append(impl_id)
+                    ]
             await TaskPlanService().persist_proposed(
                 session,
                 delivery_cycle_id=execution.delivery_cycle_id,

@@ -24,6 +24,7 @@ from core.scheduler.admission import AdmissionService
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from tests.fixtures.approvals import approve_task_plan
 from tests.fixtures.planning_workflow_harness import (
     approve_scope_and_enter_architecture,
     build_task_plan_for_cycle,
@@ -161,7 +162,7 @@ async def test_planning_through_development_with_compiled_contracts(
             execution_id=None,
             ctx=ctx,
         )
-        await TaskPlanService().accept(session, plan_row.id, ctx)
+        await approve_task_plan(session, plan_row.id)
 
     async with AsyncClient(
         transport=transport,

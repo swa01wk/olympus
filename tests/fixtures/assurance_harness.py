@@ -375,6 +375,10 @@ async def _ensure_journey_verifies_links_from_index(
     )
     if test_entity is None:
         return
+    from core.domain.delivery_cycles.models import DeliveryCycle
+
+    cycle = await session.get(DeliveryCycle, ic.delivery_cycle_id)
+    assert cycle is not None
     obls = (
         await session.execute(
             select(VerificationObligation).where(
@@ -400,7 +404,7 @@ async def _ensure_journey_verifies_links_from_index(
             continue
         session.add(
             SpecCodeLink(
-                project_id=ic.project_id,
+                project_id=cycle.project_id,
                 repository_id=ic.repository_id,
                 spec_type="AC",
                 spec_id=obl.subject_id,
@@ -433,7 +437,7 @@ async def _refresh_sentinel_plan_and_execute(
     from core.assurance.deterministic_plan import build_plan_from_verifies_links
 
     draft = await build_plan_from_verifies_links(session, ic_id)
-    if not draft.checks:
+    if not draft.checks or draft.uncovered_obligations:
         await _ensure_journey_verifies_links_from_index(session, ic_id, ctx)
         draft = await build_plan_from_verifies_links(session, ic_id)
     journey_fallback_plan = False
@@ -478,6 +482,14 @@ async def _refresh_sentinel_plan_and_execute(
         await session.flush()
         await AssuranceOrchestrator()._schedule_sentinel_execute(session, ic_id, row.id, ctx)
     else:
+        from core.assurance.plan_validation import PlanValidationService
+
+        ok, report = await PlanValidationService().validate(session, ic_id, draft)
+        if not ok:
+            raise AssertionError(
+                f"deterministic verification plan invalid: {report}; "
+                f"plan={draft.model_dump(mode='json')}"
+            )
         await AssuranceOrchestrator()._seed_validated_plan(session, ic_id, ctx)
     await _admit_ready_verification_tasks(session, ctx, ic.delivery_cycle_id)
     await run_worker_rounds(session, ctx, max_rounds=80)
@@ -494,7 +506,39 @@ async def _refresh_sentinel_plan_and_execute(
         .all()
     )
     if not sentinel_evidence:
-        raise AssertionError("sentinel.execute produced no evidence (check scheduler/eligibility)")
+        raise AssertionError(
+            "sentinel.execute produced no evidence (check scheduler/eligibility):\n"
+            + await _verification_task_diagnostics(session, ic.delivery_cycle_id)
+        )
+
+
+async def _verification_task_diagnostics(session: AsyncSession, cycle_id: uuid.UUID) -> str:
+    from core.domain.executions.models import Execution
+    from tests.journey.chained.worker_drain import _admission_verdict, _execution_trace
+
+    tasks = (
+        await session.scalars(
+            select(Task)
+            .where(Task.delivery_cycle_id == cycle_id, Task.work_type == WorkType.VERIFICATION)
+            .order_by(Task.created_at)
+        )
+    ).all()
+    lines: list[str] = []
+    for task in tasks:
+        lines.append(
+            f"{task.key} {task.title!r} {task.status.value} blocked_reason={task.blocked_reason!r}"
+        )
+        executions = (
+            await session.scalars(
+                select(Execution).where(Execution.task_id == task.id).order_by(Execution.created_at)
+            )
+        ).all()
+        for ex in executions:
+            lines.append(f" {ex.key} {ex.status.value} {ex.failure_class}: {ex.failure_detail}")
+            lines.append(await _execution_trace(session, ex))
+        if task.status == TaskStatus.READY:
+            lines.append(f" admission: {await _admission_verdict(session, task)}")
+    return "\n".join(lines) or "no VERIFICATION tasks on the cycle"
 
 
 async def ready_ic_with_sentinel_evidence(

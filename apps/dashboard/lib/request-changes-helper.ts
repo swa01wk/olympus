@@ -43,6 +43,10 @@ export function requestChangesRevises({
       return cycleType !== "BROWNFIELD_ONBOARDING";
     case "SPEC_DELTA":
       return true;
+    case "EXPECTED_BEHAVIOR":
+      return cycleType === "BUG_FIX";
+    case "TASK_PLAN":
+      return cycleType === "GREENFIELD_BUILD" || cycleType === "FEATURE_CHANGE" || cycleType === "BUG_FIX";
     default:
       return false;
   }

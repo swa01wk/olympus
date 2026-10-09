@@ -84,3 +84,57 @@ async def test_protected_branch_commit_denied(db_session, system_ctx) -> None:
         {"branch": "release/1.0", "message": "nope"},
     )
     assert result.status == "DENIED"
+
+
+@pytest.mark.asyncio
+async def test_git_commit_denied_when_protected_test_is_missing(db_session, system_ctx) -> None:
+    from core.intelligence.baselines.enums import (
+        BaselineActivation,
+        BaselineCheckKind,
+        BaselineSource,
+        BaselineStatus,
+    )
+    from core.intelligence.baselines.models import BehavioralBaseline
+
+    project, repo, sha = await seed_greenfield_repository(
+        db_session, system_ctx, project_key="prot-test"
+    )
+    db_session.add(
+        BehavioralBaseline(
+            project_id=project.id,
+            lineage_key="BL-TICKET-DEFAULT-OPEN",
+            version=1,
+            status=BaselineStatus.ACTIVE,
+            source=BaselineSource.BROWNFIELD_EXISTING_TEST,
+            given="a caller creates a ticket",
+            when="POST /tickets",
+            then="status OPEN",
+            check_kind=BaselineCheckKind.EXISTING_TEST,
+            check_ref="tests/test_ticket_service.py::test_create_defaults_open",
+            observed_behavior_ids=[],
+            exercised_stable_keys=[],
+            established_sha=sha,
+            activation=BaselineActivation.HUMAN,
+        )
+    )
+    await db_session.flush()
+    fixture = await seed_code_change_task(db_session, system_ctx, project, repo, sha)
+    bundle = await seed_execution_with_worktree(
+        db_session, system_ctx, fixture, key_prefix="prot-test"
+    )
+    gateway = ToolGateway(db_session)
+    await gateway.handle(
+        bundle.token,
+        "repo.write",
+        {
+            "path": "tests/test_ticket_service.py",
+            "content": "def test_create_ticket_defaults_priority_to_medium():\n    assert True\n",
+        },
+    )
+    result = await gateway.handle(
+        bundle.token,
+        "git.commit",
+        {"branch": f"olympus/{bundle.execution.key}", "message": "rename test"},
+    )
+    assert result.status == "FAILED"
+    assert "protected tests missing" in (result.error or "")

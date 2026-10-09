@@ -82,6 +82,20 @@ async def task_plan_accepted_contracts_issued(
     if plan_row is None:
         return GuardResult(ok=False, reasons=("TASK_PLAN_NOT_ACCEPTED",))
 
+    from core.domain.approvals.service import ApprovalService
+    from core.domain.canonical_json import sha256_hex
+    from core.domain.enums import ApprovalType
+
+    subject_hash = sha256_hex(plan_row.body or {})
+    if not await ApprovalService().is_satisfied(
+        session,
+        ApprovalType.TASK_PLAN,
+        "task_plan",
+        plan_row.id,
+        subject_hash,
+    ):
+        return GuardResult(ok=False, reasons=("TASK_PLAN_APPROVAL_PENDING",))
+
     tasks = await session.execute(
         select(Task).where(
             Task.delivery_cycle_id == cycle.id,

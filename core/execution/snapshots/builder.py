@@ -17,7 +17,10 @@ from core.domain.task_contracts.schemas import (
 from core.domain.tasks.models import Task
 from core.execution.snapshots.base_commit import BaseCommitResolver
 from core.execution.snapshots.planning_context import planning_prompt_fields_for_task
-from core.execution.snapshots.product_context import product_context_for_task
+from core.execution.snapshots.product_context import (
+    product_context_for_task,
+    protected_test_refs,
+)
 from core.policy.policy_service import ensure_policy_version
 
 
@@ -107,6 +110,11 @@ class SnapshotBuilder:
                 )
 
         product_ctx = await product_context_for_task(session, task)
+        protected_tests = (
+            await protected_test_refs(session, task)
+            if body.agent_profile == "forge.implementation"
+            else []
+        )
         planning_ctx = await planning_prompt_fields_for_task(
             session, task, agent_profile=body.agent_profile
         )
@@ -231,6 +239,7 @@ class SnapshotBuilder:
                 planning_ctx.get("parent_implementation_spec_json", "")
             ),
             impact_assessment_json=str(planning_ctx.get("impact_assessment_json", "")),
+            protected_tests=protected_tests,
         )
         payload = content.model_dump(mode="json")
         raw_body = contract.body if isinstance(contract.body, dict) else {}

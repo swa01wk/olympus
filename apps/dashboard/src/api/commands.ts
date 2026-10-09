@@ -403,6 +403,36 @@ export async function acceptTaskPlan(planId: string, idempotencyKey?: string) {
   });
 }
 
+export async function postArchitectureVersion(
+  architectureId: string,
+  body: { body: Record<string, unknown>; contracts?: Record<string, unknown>[]; note?: string; delivery_cycle_id: string },
+  idempotencyKey?: string,
+) {
+  return apiRequest<{ id: string; version: number; status: string }>(
+    `/architectures/${architectureId}/versions`,
+    {
+      method: "POST",
+      body,
+      idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+    },
+  );
+}
+
+export async function postImplementationSpecVersion(
+  specId: string,
+  body: { body: Record<string, unknown>; note?: string; delivery_cycle_id: string },
+  idempotencyKey?: string,
+) {
+  return apiRequest<{ id: string; version: number; status: string }>(
+    `/implementation-specs/${specId}/versions`,
+    {
+      method: "POST",
+      body,
+      idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+    },
+  );
+}
+
 export async function requestApproval(
   cycleId: string,
   body: RequestApprovalBody,

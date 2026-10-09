@@ -117,6 +117,15 @@ async def _scoped_feature_spec_ids(
     return list(specs.scalars())
 
 
+async def _superseded_baseline_note(
+    session: AsyncSession,
+    cycle_id: uuid.UUID,
+) -> tuple[frozenset[uuid.UUID], str | None]:
+    from core.product_model.defects.service import DefectService
+
+    return await DefectService().superseded_baseline_ids_for_cycle(session, cycle_id)
+
+
 async def _impact_baseline_and_test_source(
     session: AsyncSession,
     ic: IntegrationCandidate,
@@ -131,6 +140,7 @@ async def _impact_baseline_and_test_source(
     ia = await ImpactEngine().latest_complete(session, ic.delivery_cycle_id)
     if ia is None or cycle is None:
         return []
+    superseded_ids, approval_key = await _superseded_baseline_note(session, cycle.id)
     items = (
         await session.execute(
             select(ImpactItem).where(
@@ -170,6 +180,31 @@ async def _impact_baseline_and_test_source(
             ).scalar_one_or_none()
             if bl is None:
                 continue
+            if bl.id in superseded_ids:
+                rows.append(
+                    VerificationObligation(
+                        delivery_cycle_id=ic.delivery_cycle_id,
+                        integration_candidate_id=ic.id,
+                        gate_type=GateType.BASELINE.value,
+                        subject_type="BASELINE",
+                        subject_id=bl.id,
+                        subject_key=bl.lineage_key,
+                        required=False,
+                        allowed_evidence_types=["UNIT_TEST", "API_TEST", "INTEGRATION_TEST"],
+                        reason=ObligationReason.BASELINE_REQUIRED,
+                        source_refs=[
+                            {
+                                "type": "IMPACT_ITEM",
+                                "ref": item.ref,
+                                "path": item.path,
+                                "superseded_by_approved_expected_behavior": approval_key,
+                            }
+                        ],
+                        status=ObligationStatus.OPEN,
+                    )
+                )
+                continue
+            required = not bl.provisional
             rows.append(
                 VerificationObligation(
                     delivery_cycle_id=ic.delivery_cycle_id,
@@ -178,7 +213,7 @@ async def _impact_baseline_and_test_source(
                     subject_type="BASELINE",
                     subject_id=bl.id,
                     subject_key=bl.lineage_key,
-                    required=True,
+                    required=required,
                     allowed_evidence_types=["UNIT_TEST", "API_TEST", "INTEGRATION_TEST"],
                     reason=ObligationReason.BASELINE_REQUIRED,
                     source_refs=[{"type": "IMPACT_ITEM", "ref": item.ref, "path": item.path}],
@@ -282,10 +317,35 @@ async def _baseline_source(
         .scalars()
         .all()
     )
+    superseded_ids, approval_key = await _superseded_baseline_note(session, cycle.id)
     rows: list[VerificationObligation] = []
     for item in items:
         bl = await session.get(BehavioralBaseline, item.baseline_id)
         if bl is None or bl.status != BaselineStatus.ACTIVE:
+            continue
+        if bl.id in superseded_ids:
+            rows.append(
+                VerificationObligation(
+                    delivery_cycle_id=ic.delivery_cycle_id,
+                    integration_candidate_id=ic.id,
+                    gate_type=GateType.BASELINE.value,
+                    subject_type="BASELINE",
+                    subject_id=bl.id,
+                    subject_key=bl.lineage_key,
+                    required=False,
+                    allowed_evidence_types=["UNIT_TEST", "API_TEST", "INTEGRATION_TEST"],
+                    reason=ObligationReason.BASELINE_REQUIRED,
+                    source_refs=[
+                        {
+                            "type": "BASELINE",
+                            "id": str(bl.id),
+                            "baseline_set_key": bset.key,
+                            "superseded_by_approved_expected_behavior": approval_key,
+                        }
+                    ],
+                    status=ObligationStatus.OPEN,
+                )
+            )
             continue
         rows.append(
             VerificationObligation(
@@ -295,7 +355,7 @@ async def _baseline_source(
                 subject_type="BASELINE",
                 subject_id=bl.id,
                 subject_key=bl.lineage_key,
-                required=True,
+                required=not bl.provisional,
                 allowed_evidence_types=["UNIT_TEST", "API_TEST", "INTEGRATION_TEST"],
                 reason=ObligationReason.BASELINE_REQUIRED,
                 source_refs=[

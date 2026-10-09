@@ -23,7 +23,7 @@ Rule for every phase below: **the backend is read-only and is the source of trut
 
 Transitions: `POST /delivery-cycles/{id}/commands/{command}` with `{expected_state, payload?}`. What is possible right now, and why not: `GET /delivery-cycles/{id}/next-transitions` → `[{command, to_state, allowed, guard_preview[], guard_results[{guard_id, ok, reasons[]}], authorization_denied}]`. **The UI never decides whether a step is allowed; it renders this.**
 
-**Approvals (the human-in-the-loop record).** Types the backend actually raises today: SCOPE, ARCHITECTURE, ARCHITECTURE_DELTA, IMPLEMENTATION_SPEC, SPEC_DELTA, UNREPRODUCED_REPAIR, PROMOTION, FINDING_WAIVER, ACTION, RELEASE. **Never created by the backend:** EXPECTED_BEHAVIOR (until RL3), REPAIR_SPEC, READINESS, SPEC_DECISION, DEPLOYMENT. Repair and remediation specs use **IMPLEMENTATION_SPEC**. Statuses: PENDING → APPROVED | REJECTED | CHANGES_REQUESTED (human) or EXPIRED | CANCELLED (system). Each approval is bound to `subject_type / subject_id / subject_version / subject_hash`; if the subject changes, the approval no longer counts. Decide with `POST /approvals/{id}/decision {decision, note}`.
+**Approvals (the human-in-the-loop record).** Types the backend actually raises today: SCOPE, ARCHITECTURE, ARCHITECTURE_DELTA, IMPLEMENTATION_SPEC, SPEC_DELTA, UNREPRODUCED_REPAIR, **EXPECTED_BEHAVIOR**, **TASK_PLAN**, PROMOTION, FINDING_WAIVER, ACTION, RELEASE. **Never created by the backend:** REPAIR_SPEC, READINESS, SPEC_DECISION, DEPLOYMENT. Repair and remediation specs use **IMPLEMENTATION_SPEC**. Statuses: PENDING → APPROVED | REJECTED | CHANGES_REQUESTED (human) or EXPIRED | CANCELLED (system). Each approval is bound to `subject_type / subject_id / subject_version / subject_hash`; if the subject changes, the approval no longer counts. Decide with `POST /approvals/{id}/decision {decision, note}`.
 
 **Chat backend = Orchestrator** (`/orchestrator/sessions`).
 - `POST /orchestrator/sessions {project_id, delivery_cycle_id}` → session (8 h TTL). A cycle is required before any turn.
@@ -137,7 +137,7 @@ The backend also has no fake model provider for a running stack (`MODEL_PROVIDER
 Other cycle types reuse the same three panes; only the spine and stage contents change. Map approval types to stages the way the Studio does (`apps/dashboard/lib/studio-spine.ts`):
 
 - **FEATURE_CHANGE:** SPEC_DELTA at SPEC_DELTA; ARCHITECTURE_DELTA at IMPACT_ANALYSIS; IMPLEMENTATION_SPEC at PLANNING; shared gates (FINDING_WAIVER, ACTION, RELEASE) as in the greenfield table.
-- **BUG_FIX:** UNREPRODUCED_REPAIR at REPRODUCTION; EXPECTED_BEHAVIOR at EXPECTED_BEHAVIOR (approval type exists in the API but is not raised until RL3); repair specs use **IMPLEMENTATION_SPEC** at ROOT_CAUSE (not REPAIR_SPEC).
+- **BUG_FIX:** UNREPRODUCED_REPAIR at REPRODUCTION; **EXPECTED_BEHAVIOR** at EXPECTED_BEHAVIOR when Kira’s resolution needs human confirmation; **TASK_PLAN** at ROOT_CAUSE after a repair task plan is proposed; repair specs use **IMPLEMENTATION_SPEC** at ROOT_CAUSE (not REPAIR_SPEC).
 - **BROWNFIELD_ONBOARDING:** ARCHITECTURE (recovered model) and **PROMOTION** at BASELINE; **IMPLEMENTATION_SPEC** at REMEDIATION; `declare_ready` does not request a READINESS approval. The backend requests and approves the ARCHITECTURE, PROMOTION and remediation IMPLEMENTATION_SPEC approvals inside the promotion decision or remediation call, so they are never pending; the human decision happens in the review queue.
 - **REMEDIATION:** IMPLEMENTATION_SPEC at PLANNING.
 

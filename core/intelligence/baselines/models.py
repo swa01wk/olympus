@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -47,6 +47,7 @@ class BehavioralBaseline(Base, UUIDPkMixin, TimestampMixin):
         ForeignKey("evidence.id"), default=None
     )
     activation: Mapped[BaselineActivation | None] = mapped_column(String(32), default=None)
+    provisional: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class BaselineSet(Base, UUIDPkMixin, TimestampMixin):

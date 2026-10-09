@@ -96,6 +96,42 @@ async def get_defect(
     }
 
 
+@router.get("/defects/{defect_id}/expected-behavior-review")
+async def get_expected_behavior_review(
+    defect_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    from core.domain.exceptions import DomainError
+    from fastapi import HTTPException
+
+    try:
+        return await DefectService().expected_behavior_review_payload(session, defect_id)
+    except DomainError as exc:
+        if exc.code == "NOT_FOUND":
+            raise HTTPException(status_code=404, detail=exc.message) from exc
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+
+
+@router.get("/expected-behavior-resolutions/{resolution_id}/review")
+async def get_expected_behavior_review_by_resolution(
+    resolution_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    from core.domain.exceptions import DomainError
+    from core.product_model.defects.models import ExpectedBehaviorResolution
+    from fastapi import HTTPException
+
+    row = await session.get(ExpectedBehaviorResolution, resolution_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Resolution not found")
+    try:
+        return await DefectService().resolution_review_payload(session, row)
+    except DomainError as exc:
+        if exc.code == "NOT_FOUND":
+            raise HTTPException(status_code=404, detail=exc.message) from exc
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+
+
 @router.get("/defects/{defect_id}/reproductions")
 async def list_defect_reproductions(
     defect_id: uuid.UUID,

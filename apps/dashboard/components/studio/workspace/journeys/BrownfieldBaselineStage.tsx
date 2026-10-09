@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, EmptyState, Label, Panel, StatusBadge } from "@/components/primitives";
+import { ProvisionalBaselinesPanel } from "@/components/studio/ProvisionalBaselinesPanel";
 import { ProductSpecView } from "@/components/studio/ProductSpecView";
 import { StageWorkspaceFrame } from "@/components/studio/workspace/StageWorkspaceFrame";
 import { previewStudioPost } from "@/lib/command-preview";
@@ -230,6 +231,7 @@ export function BrownfieldBaselineStage({
   return (
     <StageWorkspaceFrame>
       <ProductSpecView projectId={projectId} />
+      <ProvisionalBaselinesPanel projectId={projectId} />
       <Panel title="Review queue" sub={`GET /delivery-cycles/${cycleId}/review-queue`}>
         <div className="ol-seg" role="radiogroup" aria-label="Queue filter">
           <button

@@ -9,11 +9,16 @@ import {
   operatorToken,
   setBrowserToken,
 } from "./helpers/studio-live-api";
+import type {
+  ProductSpecBrownfieldProvenance,
+  ProductSpecDocument,
+} from "../../src/api/types/product-spec";
 
 /**
  * RL1 phase acceptance: brownfield intake → review queue → READY, then a feature change up to the
  * architecture-delta panel and a bug fix up to the repair-spec Decision panel, driven from the
- * Studio. The repository must be staged as a bare repo inside the shared Docker volume (see
+ * Studio. The brownfield test also checks the Product spec view renders recovered provenance
+ * (RL2 acceptance; `studio-rl2.spec.ts` covers greenfield). The repository must be staged as a bare repo inside the shared Docker volume (see
  * STUDIO_RL1_REPO_URL); setup and polling use the API, every RL1 action uses the UI.
  */
 const REPO_URL =
@@ -372,6 +377,26 @@ test.describe.serial("Studio RL1 phase acceptance @live", () => {
       const p = await apiGet<{ readiness_state: string }>(request, operator, `/projects/${projectId}`);
       return p?.readiness_state === "READY_FOR_CHANGE";
     });
+
+    const doc = await apiGet<ProductSpecDocument>(request, operator, `/projects/${projectId}/product-spec`);
+    const features = doc?.capabilities.flatMap((c) => c.features) ?? [];
+    expect(features.length, "canonical specs after promotion").toBeGreaterThan(0);
+    for (const f of features) {
+      expect(f.spec.provenance.kind, `provenance of ${f.key}`).toBe("brownfield");
+    }
+    await openStudio(page, projectId, cycleId);
+    await page.getByRole("button", { name: "Product spec" }).click();
+    const view = page.locator(".ol-product-spec-overlay .ol-product-spec");
+    await expect(view).toBeVisible({ timeout: 60_000 });
+    const feature = features[0]!;
+    const provenance = feature.spec.provenance as ProductSpecBrownfieldProvenance;
+    const evidence = provenance.recovered_evidence[0];
+    const chip = evidence
+      ? `${evidence.strength} · ${evidence.support_ref}`
+      : (provenance.confidence ?? "RECOVERED");
+    await expect(view.getByRole("heading", { name: `${feature.key} · ${feature.name}` })).toBeVisible();
+    await expect(view.locator(".ol-ws-chip").filter({ hasText: chip }).first()).toBeVisible();
+    await expect(view.getByRole("button", { name: /^PRD v/ })).toHaveCount(0);
   });
 
   test("feature change: architecture-delta panel at IMPACT_ANALYSIS", { tag: "@live" }, async ({

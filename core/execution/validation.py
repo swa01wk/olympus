@@ -90,10 +90,12 @@ async def _changed_files_validator(
     row = result.scalar_one_or_none()
     if row is None:
         return None
-    actual = sorted({item.get("path", "") for item in row.changed_files})
-    declared = sorted(impl.changed_files)
-    if actual != declared:
-        return f"changed_files mismatch: commit {actual} vs output {declared}"
+    actual = {item.get("path", "") for item in row.changed_files}
+    # Every committed file must be reported. Extra reported files are tolerated: agents list
+    # files they rewrote with identical content, which never show up in the commit.
+    unreported = sorted(actual - set(impl.changed_files))
+    if unreported:
+        return f"changed_files mismatch: commit changed {unreported} not in output"
     return None
 
 

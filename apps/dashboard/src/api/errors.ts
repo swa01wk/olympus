@@ -14,6 +14,21 @@ export class OlympusApiError extends Error {
   }
 }
 
+/** FastAPI request-validation errors: `detail: [{loc: [...], msg}]`. */
+function validationMessage(detail: unknown): string | null {
+  if (!Array.isArray(detail) || detail.length === 0) return null;
+  const parts = detail
+    .map((d) => {
+      if (typeof d !== "object" || d === null) return null;
+      const { loc, msg } = d as { loc?: unknown[]; msg?: unknown };
+      if (typeof msg !== "string") return null;
+      const field = Array.isArray(loc) ? loc.filter((p) => p !== "body").join(".") : "";
+      return field ? `${field}: ${msg}` : msg;
+    })
+    .filter((p): p is string => Boolean(p));
+  return parts.length > 0 ? parts.join("; ") : null;
+}
+
 export async function errorFromResponse(res: Response): Promise<OlympusApiError> {
   let body: ApiErrorBody = {};
   try {
@@ -34,6 +49,6 @@ export async function errorFromResponse(res: Response): Promise<OlympusApiError>
       ? body.message
       : typeof body.detail === "string"
         ? body.detail
-        : res.statusText || "Request failed";
+        : validationMessage(body.detail) ?? (res.statusText || "Request failed");
   return new OlympusApiError(res.status, code, message, body.details ?? body.detail);
 }

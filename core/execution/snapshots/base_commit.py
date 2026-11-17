@@ -50,6 +50,24 @@ class BaseCommitResolver:
                 session, task, contract.repository_id, ctx=None
             )
 
+        if policy == "QUEUE_TIP":
+            from core.integration.queue_tip import QueueTipResolver
+
+            queue_repo = contract.repository_id
+            if queue_repo is None:
+                cycle = await session.get(DeliveryCycle, task.delivery_cycle_id)
+                queue_repo = cycle.repository_id if cycle is not None else None
+            if queue_repo is None:
+                raise ValueError("BASE_RESOLVER_UNAVAILABLE")
+            tip = await QueueTipResolver().resolve(session, task, queue_repo)
+            return BaseResolution(
+                policy=tip.policy,
+                base_commit=tip.base_commit,
+                commit_available=await self._commit_exists(session, queue_repo, tip.base_commit),
+                inputs=tip.inputs,
+                repository=await self._repository_block(session, queue_repo),
+            )
+
         repository_id = contract.repository_id
         repo_block: dict[str, object] | None = None
         base_commit: str | None = None

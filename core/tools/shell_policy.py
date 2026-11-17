@@ -57,7 +57,7 @@ def scrubbed_env() -> dict[str, str]:
     secret_prefixes = ("OLYMPUS_", "ANTHROPIC_", "OPENAI_", "GITHUB_", "DATABASE_")
     env = {
         "PATH": os.environ.get("PATH", ""),
-        "HOME": os.environ.get("HOME", "/tmp"),
+        "HOME": os.environ.get("HOME", "/tmp"),  # nosec B108 (fallback HOME, no files made)
         "LANG": "C.UTF-8",
     }
     for key, value in os.environ.items():

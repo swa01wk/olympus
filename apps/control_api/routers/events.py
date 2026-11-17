@@ -18,19 +18,22 @@ async def list_events(
     cycle_id: uuid.UUID,
     after_sequence: int = Query(default=0, alias="after_sequence"),
     limit: int = Query(default=50, le=200),
+    event_type: str | None = Query(default=None),
+    latest: bool = Query(default=False, description="Return the newest `limit` events"),
     session: AsyncSession = Depends(get_db),
 ) -> list[dict[str, object]]:
     from sqlalchemy import select
 
-    result = await session.execute(
-        select(DomainEvent)
-        .where(
-            DomainEvent.delivery_cycle_id == cycle_id,
-            DomainEvent.sequence > after_sequence,
-        )
-        .order_by(DomainEvent.sequence)
-        .limit(limit)
+    query = select(DomainEvent).where(
+        DomainEvent.delivery_cycle_id == cycle_id,
+        DomainEvent.sequence > after_sequence,
     )
+    if event_type:
+        query = query.where(DomainEvent.event_type == event_type)
+    order = DomainEvent.sequence.desc() if latest else DomainEvent.sequence
+    rows = list((await session.execute(query.order_by(order).limit(limit))).scalars())
+    if latest:
+        rows.reverse()
     return [
         {
             "id": str(e.id),
@@ -39,7 +42,7 @@ async def list_events(
             "payload": e.payload,
             "occurred_at": e.occurred_at.isoformat(),
         }
-        for e in result.scalars()
+        for e in rows
     ]
 
 

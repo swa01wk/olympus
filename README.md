@@ -2,6 +2,30 @@
 
 Python 3.12 modular monolith: FastAPI control API, scheduler and execution workers, PostgreSQL 16 + pgvector.
 
+## Use it (solo, on your machine)
+
+Needs [uv](https://docs.astral.sh/uv/), Docker and Node.js 20+.
+
+```bash
+make dev        # first run creates .env; add OPENAI_API_KEY or ANTHROPIC_API_KEY to it, then run again
+```
+
+Open <http://127.0.0.1:3010>, choose **Build a new app**, give it a name and paste or drop your PRD.
+Autopilot then runs the whole journey on its own: it reads the PRD, designs the app, plans the
+work, writes and tests the code and prepares the release. It stops only when a decision is yours
+(approve the features, the design, the plans, the task list and the release, or answer a
+question), and shows each one as a card with Approve / Request changes / Reject. If a step
+fails it stops and offers **Try again**; it never retries on its own in a loop.
+
+`make dev` starts the database, the API, both workers and the dashboard, and signs you in
+automatically (one local owner account; token in `var/olympus/local-token`). Ctrl+C stops
+everything. Logs are in `var/olympus/logs/`. The older, detailed operator screens are still
+there under **Inspect**.
+
+Autopilot covers new apps from a PRD today; existing repos, feature changes and bug fixes are
+next. Turn it off for a run with **Pause**, or for the whole machine with
+`OLYMPUS_AUTOPILOT_ENABLED=false`.
+
 ## Prerequisites
 
 - Python 3.12

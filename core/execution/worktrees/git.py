@@ -127,7 +127,7 @@ class GitCli:
     def _scrubbed_env(self) -> dict[str, str]:
         env = {
             "PATH": os.environ.get("PATH", ""),
-            "HOME": os.environ.get("HOME", "/tmp"),
+            "HOME": os.environ.get("HOME", "/tmp"),  # nosec B108 (fallback HOME, no files made)
             "LANG": "C.UTF-8",
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -137,6 +137,13 @@ class GitCli:
     @staticmethod
     def hook_disabled_config_args() -> list[str]:
         return ["-c", "core.hooksPath=/dev/null"]
+
+    @staticmethod
+    def integration_identity_args() -> list[str]:
+        """Name/email for commits Olympus itself makes (merges). The scrubbed env ignores the
+        user's global git config, so without these `git merge` fails with "Please tell me who
+        you are"."""
+        return ["-c", "user.name=Olympus Integration", "-c", "user.email=integration@olympus.local"]
 
 
 def resolve_git_metadata_dir(worktree_path: Path) -> Path:

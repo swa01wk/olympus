@@ -120,3 +120,28 @@ def test_sanitize_proposal_drops_cross_spec_requirement_refs() -> None:
     fixed = sanitize_proposal_requirement_refs(p)
     assert fixed.acceptance_criteria[0].requirement_refs == ["REQ-1"]
     assert validate_proposal(fixed) == []
+
+
+@pytest.mark.unit
+def test_sanitize_promotes_an_ac_when_spec_has_none_mandatory() -> None:
+    p = _minimal_valid()
+    review = p.acceptance_criteria[0].model_copy(
+        update={
+            "ref": "AC-0",
+            "mandatory": False,
+            "evidence_requirement": EvidenceRequirement.REVIEW_ALLOWED,
+        }
+    )
+    optional = p.acceptance_criteria[0].model_copy(update={"mandatory": False})
+    p = p.model_copy(update={"acceptance_criteria": [review, optional]})
+    assert any("mandatory AC" in e for e in validate_proposal(p))
+
+    fixed = sanitize_proposal_requirement_refs(p)
+    assert [a.mandatory for a in fixed.acceptance_criteria] == [False, True]
+    assert validate_proposal(fixed) == []
+
+
+@pytest.mark.unit
+def test_sanitize_leaves_specs_with_a_mandatory_ac_alone() -> None:
+    p = _minimal_valid()
+    assert sanitize_proposal_requirement_refs(p) is p

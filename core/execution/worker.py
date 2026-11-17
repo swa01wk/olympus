@@ -301,7 +301,7 @@ class ExecutionWorker:
                 payload={
                     "failure_class": outcome.error_code or "RUNTIME_ERROR",
                     "failure_detail": {"message": outcome.error_message},
-                    "retriable": True,
+                    "retriable": outcome.retriable,
                     "runtime_metadata": outcome.runtime_metadata,
                 },
             )

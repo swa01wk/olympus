@@ -17,7 +17,7 @@ Mandatory acceptance criteria keys:
 Repository file listing at base commit:
 {{repo_listing}}
 
-Each task must set implementation_spec_ref to one of the lineage_key values above, exactly as written (no version suffix), include allowed_scope within that spec's file_scope, and list required_outputs: candidate_commit, changed_files, test_results.
+Each task must set implementation_spec_ref to one of the lineage_key values above, exactly as written (no version suffix), include allowed_scope within that spec's file_scope (if a task also covers other implementation specs, list their lineage_keys in requirement_refs; allowed_scope may then use their file_scope too), and list required_outputs: candidate_commit, changed_files, test_results.
 
 {% if revision_feedback %}
 ## Revision request

@@ -51,7 +51,11 @@ def _push_empty_commit(git_dir: Path, branch: str, message: str) -> str:
         src.mkdir()
         git.run(GitCli.hook_disabled_config_args() + ["clone", str(git_dir), str(src)], check=True)
         git.run(["checkout", branch], cwd=src, check=True)
-        git.run(["commit", "--allow-empty", "-m", message], cwd=src, check=True)
+        git.run(
+            GitCli.integration_identity_args() + ["commit", "--allow-empty", "-m", message],
+            cwd=src,
+            check=True,
+        )
         sha = git.run(["rev-parse", "HEAD"], cwd=src, check=True).stdout.strip()
         git.run(
             GitCli.hook_disabled_config_args() + ["push", "origin", branch],
@@ -101,7 +105,11 @@ def _push_new_branch(git_dir: Path, branch: str, message: str) -> str:
         src.mkdir()
         git.run(GitCli.hook_disabled_config_args() + ["clone", str(git_dir), str(src)], check=True)
         git.run(["checkout", "-b", branch], cwd=src, check=True)
-        git.run(["commit", "--allow-empty", "-m", message], cwd=src, check=True)
+        git.run(
+            GitCli.integration_identity_args() + ["commit", "--allow-empty", "-m", message],
+            cwd=src,
+            check=True,
+        )
         sha = git.run(["rev-parse", "HEAD"], cwd=src, check=True).stdout.strip()
         git.run(
             GitCli.hook_disabled_config_args() + ["push", "origin", f"HEAD:{branch}"],

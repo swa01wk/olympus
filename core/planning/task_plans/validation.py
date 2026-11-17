@@ -3,9 +3,51 @@ from __future__ import annotations
 from collections import defaultdict, deque
 
 from core.planning.glob_scope import scope_contains
-from core.planning.schemas import ImplementationSpecBody, PlanValidationReport, TaskPlan
+from core.planning.schemas import ImplementationSpecBody, PlanValidationReport, TaskDraft, TaskPlan
 
 _REQUIRED_OUTPUTS = {"candidate_commit", "changed_files", "test_results"}
+
+
+def task_file_scope(
+    task: TaskDraft, specs_by_lineage: dict[str, ImplementationSpecBody]
+) -> list[str]:
+    """Files a task may touch: its primary spec's file_scope plus those of any other approved
+    implementation specs it lists in requirement_refs (planners group several features per task)."""
+    scope: list[str] = []
+    for key in [task.implementation_spec_ref, *task.requirement_refs]:
+        body = specs_by_lineage.get(key)
+        if body is None:
+            continue
+        scope.extend(p for p in body.file_scope if p not in scope)
+    return scope
+
+
+def stacked_dependencies(plan: TaskPlan) -> list[tuple[str, str]]:
+    """The plan's dependencies plus a chain through every task, as (task_ref, depends_on_ref).
+
+    Tasks are ordered so each comes after its declared dependencies (ties keep plan order),
+    then each task also depends on the one before it. A task's base is then the previous
+    task's candidate commit, which already contains all earlier work, so tasks build on each
+    other instead of branching from the same commit and conflicting at integration. Assumes
+    the plan is acyclic (the validator rejects cycles).
+    """
+    refs = [t.ref for t in plan.tasks]
+    declared = [(d.task_ref, d.depends_on_ref) for d in plan.dependencies]
+    waiting_on: dict[str, set[str]] = {r: set() for r in refs}
+    for task_ref, dep_ref in declared:
+        if task_ref in waiting_on and dep_ref in waiting_on:
+            waiting_on[task_ref].add(dep_ref)
+    order: list[str] = []
+    while len(order) < len(refs):
+        ready = next((r for r in refs if r not in order and waiting_on[r] <= set(order)), None)
+        if ready is None:  # cycle: leave the declared edges alone
+            return declared
+        order.append(ready)
+    edges = list(declared)
+    for prev, ref in zip(order, order[1:], strict=False):
+        if (ref, prev) not in edges:
+            edges.append((ref, prev))
+    return edges
 
 
 class TaskPlanValidator:
@@ -28,8 +70,7 @@ class TaskPlanValidator:
             if task.implementation_spec_ref not in spec_keys:
                 errors.append(f"unknown implementation_spec_ref: {task.implementation_spec_ref}")
                 continue
-            spec_body = specs_by_lineage[task.implementation_spec_ref]
-            if not scope_contains(spec_body.file_scope, task.allowed_scope):
+            if not scope_contains(task_file_scope(task, specs_by_lineage), task.allowed_scope):
                 errors.append(f"task {task.ref} allowed_scope exceeds implementation file_scope")
             missing_out = _REQUIRED_OUTPUTS - set(task.required_outputs)
             if missing_out:

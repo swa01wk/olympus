@@ -45,6 +45,17 @@ async def _system_ctx(session_factory: async_sessionmaker[AsyncSession]) -> Comm
         return CommandContext(actor=actor, correlation_id=str(uuid.uuid4()))
 
 
+async def _ensure_agent_actor(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """ToolGateway attributes Forge's mutating tool calls to an AGENT actor; without one every
+    coding task fails with "No AGENT actor configured"."""
+    async with session_factory() as session, session.begin():
+        existing = await session.execute(
+            select(Actor.id).where(Actor.kind == ActorKind.AGENT).limit(1)
+        )
+        if existing.scalar_one_or_none() is None:
+            session.add(Actor(kind=ActorKind.AGENT, name="forge", roles=[ActorRole.SYSTEM.value]))
+
+
 async def run_tick(
     logger: Any,
     session_factory: async_sessionmaker[AsyncSession],
@@ -74,6 +85,7 @@ async def run_loop(*, once: bool = False) -> int:
     create_async_engine_from_settings(settings)
     session_factory = create_session_factory()
     ctx = await _system_ctx(session_factory)
+    await _ensure_agent_actor(session_factory)
     async with session_factory() as session, session.begin():
         await run_startup_reconcilers(session)
     worker_id = os.environ.get("OLYMPUS_WORKER_ID", f"execution-{uuid.uuid4().hex[:8]}")

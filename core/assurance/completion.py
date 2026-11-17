@@ -29,7 +29,7 @@ from core.domain.artifacts.models import Artifact
 from core.domain.delivery_cycles.models import DeliveryCycle
 from core.domain.exceptions import DomainError
 from core.domain.executions.models import Execution
-from core.domain.task_contracts.schemas import TaskContractBody
+from core.domain.task_contracts.schemas import parse_task_contract_body
 from core.execution.artifacts import ArtifactStore
 from core.integration.enums import FindingSeverity, FindingSource
 from core.integration.models import IntegrationCandidate
@@ -284,7 +284,7 @@ class AssuranceCompletionService:
         contract = contract_row.scalar_one_or_none()
         if contract is None:
             return None
-        body = TaskContractBody.model_validate(contract.body)
+        body = parse_task_contract_body(contract.body)
         for ref in body.inputs:
             if ref.ref_type == "INTEGRATION_CANDIDATE":
                 return ref.ref_id

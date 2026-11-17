@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.assurance.findings import FindingService
+from core.assurance.models import Finding
 from core.commands.context import CommandContext
 from core.domain.candidate_commits.models import CandidateCommit
 from core.domain.delivery_cycles.models import DeliveryCycle
@@ -22,7 +23,11 @@ from core.execution.worktrees.manager import WorktreeManager
 from core.integration.checks import run_integration_checks
 from core.integration.enums import FindingSeverity, FindingSource, ICStatus
 from core.integration.models import IntegrationCandidate, IntegrationCandidateCommit
-from core.integration.remediation import create_merge_conflict_remediation
+from core.integration.remediation import (
+    create_check_failure_remediation,
+    create_merge_conflict_remediation,
+    summarize_check_output,
+)
 from core.repositories.git_inspect import GitInspector
 from core.repositories.workspace_locator import WorkspaceLocator
 
@@ -62,7 +67,12 @@ async def run_integration_merge(
             detail={"cycle_base_sha": cycle.base_sha, "ic_base_sha": ic.base_sha},
             execution_id=execution.id,
         )
-        return ExecutorOutcome(status="FAILED", error_code="ANCESTRY_INVALID", error_message="base")
+        return ExecutorOutcome(
+            status="FAILED",
+            error_code="ANCESTRY_INVALID",
+            error_message="base",
+            retriable=False,
+        )
 
     commits = await _ordered_included_commits(session, ic.id)
     for cc in commits:
@@ -78,7 +88,10 @@ async def run_integration_merge(
                 execution_id=execution.id,
             )
             return ExecutorOutcome(
-                status="FAILED", error_code="ANCESTRY_INVALID", error_message="candidate"
+                status="FAILED",
+                error_code="ANCESTRY_INVALID",
+                error_message="candidate",
+                retriable=False,
             )
 
     wt_mgr = WorktreeManager()
@@ -102,6 +115,7 @@ async def run_integration_merge(
     head = ic.base_sha
     conflict_files: list[str] = []
     conflict_tasks: list[str] = []
+    included_shas = [cc.sha for cc in commits]
     for link in await _ordered_links(session, ic.id):
         if not link.included:
             continue
@@ -110,8 +124,17 @@ async def run_integration_merge(
             continue
         if inspector.is_ancestor(git_dir, candidate_commit.sha, head):
             continue
+        # A conflict-remediation commit contains the commit it resolved; merging that commit
+        # on its own would hit the same conflict again, so let the remediation bring it in.
+        if any(
+            sha != candidate_commit.sha
+            and inspector.is_ancestor(git_dir, candidate_commit.sha, sha)
+            for sha in included_shas
+        ):
+            continue
         merge = git.run(
             GitCli.hook_disabled_config_args()
+            + GitCli.integration_identity_args()
             + [
                 "merge",
                 "--no-ff",
@@ -124,8 +147,32 @@ async def run_integration_merge(
             check=False,
         )
         if merge.returncode != 0:
-            git.run(["merge", "--abort"], cwd=wt_path, check=False)
             conflict_files = _parse_conflict_files(merge.stderr + merge.stdout)
+            if not conflict_files:
+                # Not a content conflict (e.g. git refused to run): a remediation task could
+                # not fix it, so fail with git's own message.
+                git.run(["merge", "--abort"], cwd=wt_path, check=False)
+                await _fail_ic(
+                    session,
+                    ic,
+                    cycle,
+                    command_ctx,
+                    category="MERGE_FAILED",
+                    title=f"git merge failed integrating {ic.key}",
+                    detail={
+                        "candidate_sha": candidate_commit.sha,
+                        "git_output": (merge.stderr + merge.stdout)[-2000:],
+                    },
+                    execution_id=execution.id,
+                )
+                return ExecutorOutcome(
+                    status="FAILED",
+                    error_code="MERGE_FAILED",
+                    error_message=(merge.stderr or merge.stdout).strip()[-500:]
+                    or "git merge failed",
+                    retriable=False,
+                )
+            conflict_sha = _commit_conflict_state(git, wt_path, git_dir, ic.key)
             task_key = (
                 ic.ordering[link.position]["task_key"] if link.position < len(ic.ordering) else ""
             )
@@ -144,13 +191,22 @@ async def run_integration_merge(
                     "conflicting_files": conflict_files,
                     "task_keys": conflict_tasks,
                     "candidate_sha": candidate_commit.sha,
+                    "merged_head_sha": head,
+                    "conflict_sha": conflict_sha,
                 },
                 ctx=command_ctx,
                 integration_candidate_id=ic.id,
                 producer_execution_id=execution.id,
             )
             await create_merge_conflict_remediation(
-                session, ic, finding, conflict_files, command_ctx
+                session,
+                ic,
+                finding,
+                conflict_files,
+                command_ctx,
+                conflict_sha=conflict_sha,
+                candidate_sha=candidate_commit.sha,
+                task_key=task_key,
             )
             await append_domain_event(
                 session,
@@ -168,6 +224,7 @@ async def run_integration_merge(
                 error_code="MERGE_CONFLICT",
                 error_message="merge conflict",
                 output={"finding_id": str(finding.id)},
+                retriable=False,
             )
         head = git.run(["rev-parse", "HEAD"], cwd=wt_path, check=True).stdout.strip()
 
@@ -198,20 +255,30 @@ async def run_integration_merge(
     )
     ic.checks_artifact_id = artifact.id
     if not checks.ok:
-        await _fail_ic(
+        finding = await _fail_ic(
             session,
             ic,
             cycle,
             command_ctx,
             category="INTEGRATION_CHECK_FAILED",
             title="Integration checks failed",
-            detail={"artifact_id": str(artifact.id)},
+            detail={
+                "artifact_id": str(artifact.id),
+                "merged_head_sha": head,
+                "summary": summarize_check_output(checks.output),
+            },
             execution_id=execution.id,
+        )
+        # Same as a merge conflict: hand the failure to a coding agent, working on the merged
+        # code, instead of stopping. Capped so a fix that keeps failing comes back to a person.
+        await create_check_failure_remediation(
+            session, ic, finding, command_ctx, merged_head_sha=head, auto=True
         )
         return ExecutorOutcome(
             status="FAILED",
             error_code="INTEGRATION_CHECK_FAILED",
             error_message="checks failed",
+            retriable=False,
         )
 
     ic.integrated_sha = head
@@ -277,10 +344,10 @@ async def _fail_ic(
     title: str,
     detail: dict[str, object],
     execution_id: uuid.UUID,
-) -> None:
+) -> Finding:
     ic.status = ICStatus.FAILED
     await session.flush()
-    await FindingService().create(
+    finding = await FindingService().create(
         session,
         project_id=cycle.project_id,
         delivery_cycle_id=cycle.id,
@@ -304,13 +371,45 @@ async def _fail_ic(
         project_id=cycle.project_id,
         delivery_cycle_id=cycle.id,
     )
+    return finding
 
 
 def _parse_conflict_files(text: str) -> list[str]:
+    """Paths from git's "CONFLICT (content): Merge conflict in <path>" lines."""
     files: list[str] = []
     for line in text.splitlines():
-        if line.startswith("CONFLICT") and "merge" in line:
-            parts = line.split()
-            if parts:
-                files.append(parts[-1])
+        if line.startswith("CONFLICT") and "merge conflict in " in line.lower():
+            path = line[line.lower().rindex("merge conflict in ") + len("merge conflict in ") :]
+            if path.strip() and path.strip() not in files:
+                files.append(path.strip())
     return files
+
+
+def _commit_conflict_state(
+    git: GitCli, wt_path: object, git_dir: object, ic_key: str
+) -> str | None:
+    """Commit the half-done merge (conflict markers included) so a remediation agent can start
+    from it, keep it reachable on olympus/conflict/<ic_key>, and return its sha.
+
+    The commit is a merge commit whose parents are the integrated head and the conflicting
+    candidate, so the resolved commit built on it contains that candidate.
+    """
+    from pathlib import Path
+
+    cwd = Path(str(wt_path))
+    git.run(["add", "-A"], cwd=cwd, check=False)
+    commit = git.run(
+        GitCli.hook_disabled_config_args()
+        + GitCli.integration_identity_args()
+        + ["commit", "--no-edit", "-m", f"Olympus Integration: unresolved conflict in {ic_key}"],
+        cwd=cwd,
+        check=False,
+    )
+    if commit.returncode != 0:
+        git.run(["merge", "--abort"], cwd=cwd, check=False)
+        return None
+    sha = git.run(["rev-parse", "HEAD"], cwd=cwd, check=True).stdout.strip()
+    git.run(
+        ["branch", "-f", f"olympus/conflict/{ic_key}", sha], git_dir=Path(str(git_dir)), check=False
+    )
+    return sha

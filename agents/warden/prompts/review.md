@@ -1,6 +1,6 @@
 ---
 id: warden.review
-version: 2
+version: 3
 ---
 {{ decision_context }}
 
@@ -10,3 +10,9 @@ Review the integrated change against architecture, contracts, and implementation
 Produce structured findings only — you cannot set gate status or mark findings as blocking.
 
 Summarize conformance and recommend APPROVE or REQUEST_CHANGES.
+
+Approved implementation specs:
+{{ specs_json }}
+
+Integrated diff (cycle base to integrated commit):
+{{ integrated_diff }}

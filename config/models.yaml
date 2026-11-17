@@ -12,6 +12,8 @@ retention:
 aliases:
   product_decomposition:
     model_env: MODEL_PRODUCT_REASONING
+    # A full PRD's capabilities/features/requirements JSON overruns 4096 tokens and gets cut off.
+    max_output_tokens: 16384
   planning:
     model_env: MODEL_PLANNING
   architecture:

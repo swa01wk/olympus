@@ -102,7 +102,7 @@ async def run_probe_in_workspace(
     for _ in range(30):
         time.sleep(0.2)
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1) as resp:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1) as resp:  # nosec B310 (loopback http)
                 health_ok = resp.status == 200
                 break
         except (urllib.error.URLError, TimeoutError):
@@ -121,7 +121,7 @@ async def run_probe_in_workspace(
             req.data = json.dumps(raw["body"]).encode()
             req.add_header("Content-Type", "application/json")
         try:
-            with urllib.request.urlopen(req, timeout=policy.timeout_s) as resp:
+            with urllib.request.urlopen(req, timeout=policy.timeout_s) as resp:  # nosec B310 (loopback http)
                 ok = resp.status == expected_status
         except urllib.error.HTTPError as exc:
             ok = exc.code == expected_status

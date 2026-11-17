@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from core.config.settings import OlympusSettings
 from core.domain.model_calls.models import ModelCall
 from core.runtime.contracts import ContextItem, ModelRequest
+from core.runtime.model_policy import ModelPolicy
 from core.runtime.model_router import ModelRouter
 from core.runtime.providers.fake_provider import FakeProvider, FakeScriptStep
 from sqlalchemy import select
@@ -24,6 +26,8 @@ async def test_model_router_persists_call_metadata(db_session, system_actor) -> 
         db_session,
         actor_id=system_actor.id,
         providers={"anthropic": fake, "openai": fake},
+        # Explicit models: CI has no .env, so env-derived settings leave the alias unresolved.
+        policy=ModelPolicy(OlympusSettings(model_provider="anthropic", model_default="fake-model")),
     )
     await router.invoke(
         ModelRequest(

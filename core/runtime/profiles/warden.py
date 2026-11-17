@@ -31,7 +31,11 @@ def _build_warden_graph(deps: GraphDeps) -> Any:
             template,
             {
                 "integrated_diff": str(snap.get("integrated_diff") or ""),
-                "specs_json": json.dumps(snap.get("specs") or [], indent=2),
+                "specs_json": (
+                    snap["specs"]
+                    if isinstance(snap.get("specs"), str)
+                    else json.dumps(snap.get("specs") or [], indent=2)
+                ),
                 "decision_context": decision_context,
             },
         )

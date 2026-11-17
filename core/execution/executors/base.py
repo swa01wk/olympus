@@ -33,6 +33,9 @@ class ExecutorOutcome:
     model_call_ids: list[uuid.UUID] = field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
+    # False when running the same execution again cannot succeed (e.g. a merge conflict or
+    # failed checks on the same commits): the failure needs a fix, not a retry.
+    retriable: bool = True
 
 
 class Executor(Protocol):

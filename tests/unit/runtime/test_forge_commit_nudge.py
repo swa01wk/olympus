@@ -30,7 +30,9 @@ _RESULT = ImplementationResult(
 )
 
 
-async def _run(commits: AsyncMock, invoke: AsyncMock | None = None) -> tuple[dict, AsyncMock]:
+async def _run(
+    commits: AsyncMock, invoke: AsyncMock | None = None, gateway: object | None = None
+) -> tuple[dict, AsyncMock]:
     clear_profiles()
     register_forge_profile()
     router = ModelRouter(MagicMock(), actor_id=uuid.uuid4(), providers={"fake": MagicMock()})
@@ -51,7 +53,7 @@ async def _run(commits: AsyncMock, invoke: AsyncMock | None = None) -> tuple[dic
             snapshot={},
         ),
         model_router=router,
-        tool_gateway=DenyAllToolGateway(),
+        tool_gateway=gateway or DenyAllToolGateway(),
         cancel_event=asyncio.Event(),
         session=MagicMock(),
         model_call_ids=[],
@@ -78,7 +80,8 @@ async def test_result_after_commit_is_accepted_immediately() -> None:
 
 @pytest.mark.asyncio
 async def test_result_without_commit_is_sent_back_until_commit_exists() -> None:
-    state, invoke = await _run(AsyncMock(side_effect=[None, object()]))
+    # the last value answers the end-of-run "anything left to commit?" check
+    state, invoke = await _run(AsyncMock(side_effect=[None, object(), object()]))
     assert invoke.await_count == 2
     retry_context = invoke.await_args_list[1].args[0].context[0].content
     assert "no candidate commit exists" in retry_context
@@ -87,7 +90,8 @@ async def test_result_without_commit_is_sent_back_until_commit_exists() -> None:
 
 @pytest.mark.asyncio
 async def test_nudges_are_bounded() -> None:
-    state, invoke = await _run(AsyncMock(side_effect=[None] * _MAX_COMMIT_NUDGES))
+    # one extra None for the end-of-run check; the deny-all gateway refuses the safety commit
+    state, invoke = await _run(AsyncMock(side_effect=[None] * (_MAX_COMMIT_NUDGES + 1)))
     assert invoke.await_count == _MAX_COMMIT_NUDGES + 1
     assert state["output"] == _RESULT.model_dump()
 
@@ -104,3 +108,23 @@ async def test_schema_failures_fall_back_to_the_committed_result() -> None:
     assert invoke.await_args_list[1].args[0].context[0].content.count("invalid schema") == 1
     assert invoke.await_args_list[2].args[0].purpose == "forge.implement.finalize"
     assert state["output"]["changed_files"] == ["app/api/tickets.py"]
+
+
+@pytest.mark.asyncio
+async def test_uncommitted_work_is_committed_and_reported_when_nudges_run_out() -> None:
+    from core.runtime.contracts import ToolResult
+
+    commit = SimpleNamespace(changed_files=[{"path": "app/api/tickets.py"}, {"path": "app/x.py"}])
+    gateway = SimpleNamespace(
+        request=AsyncMock(
+            return_value=ToolResult(
+                tool_call_id="c1",
+                content='{"changed_files": [{"path": "app/api/tickets.py"}, {"path": "app/x.py"}]}',
+            )
+        )
+    )
+    commits = AsyncMock(side_effect=[None] * (_MAX_COMMIT_NUDGES + 1) + [commit])
+    state, _ = await _run(commits, gateway=gateway)
+    gateway.request.assert_awaited_once()
+    assert gateway.request.await_args.args[0] == "git.commit"
+    assert state["output"]["changed_files"] == ["app/api/tickets.py", "app/x.py"]

@@ -18,6 +18,9 @@ class Project(Base, UUIDPkMixin, TimestampMixin):
     active_baseline_set_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("baseline_sets.id"), default=None
     )
+    # Folder on this machine the project was started from (`olympus start`). Releases are
+    # delivered back into it as `olympus/...` branches; never written to otherwise.
+    local_path: Mapped[str | None] = mapped_column(String(1024), unique=True, default=None)
 
 
 class ProjectSequence(Base):

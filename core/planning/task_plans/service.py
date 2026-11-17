@@ -20,7 +20,11 @@ from core.planning.compiler import CompilerInputs, TaskContractCompiler
 from core.planning.implementation_specs.service import ImplementationSpecService
 from core.planning.models import Architecture, ImplementationSpec, TaskPlanRow, TaskSpecRef
 from core.planning.schemas import ImplementationSpecBody, PlanValidationReport, TaskPlan
-from core.planning.task_plans.validation import TaskPlanValidator
+from core.planning.task_plans.validation import (
+    TaskPlanValidator,
+    stacked_dependencies,
+    task_file_scope,
+)
 from core.policy.policy_service import PolicyService, ensure_policy_version
 from core.product_model.models import AcceptanceCriterion, FeatureSpec, ScopeSet, ScopeSetItem
 from core.review.auto_request import ensure_pending_approval
@@ -423,9 +427,10 @@ class TaskPlanService:
                         )
                     )
 
-        for dep in plan.dependencies:
-            t = ref_to_task[dep.task_ref]
-            d = ref_to_task[dep.depends_on_ref]
+        dependencies = stacked_dependencies(plan)
+        for task_ref, depends_on_ref in dependencies:
+            t = ref_to_task[task_ref]
+            d = ref_to_task[depends_on_ref]
             await task_svc.add_dependency(session, t.id, d.id)
 
         arch_id = next(iter(impl_by_lineage.values())).architecture_id
@@ -461,6 +466,7 @@ class TaskPlanService:
                     )
 
         contract_svc = ContractService()
+        impl_bodies = {k: self._impl.parse_body(v) for k, v in impl_by_lineage.items()}
         for draft in plan.tasks:
             task = ref_to_task[draft.ref]
             impl = impl_by_lineage[draft.implementation_spec_ref]
@@ -471,7 +477,7 @@ class TaskPlanService:
                 ac_row = ac_by_key.get(ac_key)
                 if ac_row is not None:
                     ac_triples.append((ac_row.id, 1, ac_row.lineage_key))
-            has_deps = any(d.task_ref == draft.ref for d in plan.dependencies)
+            has_deps = any(task_ref == draft.ref for task_ref, _ in dependencies)
             body, inputs_hash = self._compiler.compile(
                 CompilerInputs(
                     task_draft=draft,
@@ -495,6 +501,7 @@ class TaskPlanService:
                     new_acceptance_test_refs=test_refs,
                     extra_constraints=extra_constraints,
                     deny_scope_prefixes=deny_prefixes,
+                    extra_file_scope=tuple(task_file_scope(draft, impl_bodies)),
                 )
             )
             contract = await contract_svc.create_draft(

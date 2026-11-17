@@ -43,6 +43,13 @@ async def git_commit(ctx: ToolExecutionContext, params: dict[str, object]) -> di
     if branch != expected_branch:
         raise PathPolicyViolation(f"commit only allowed on branch {expected_branch}")
     message = str(params.get("message", "feat: implementation"))
+    # Refuse before touching git: committing first would leave an unrecorded commit on the
+    # branch, so the branch would no longer match the candidate Olympus reviews and merges.
+    existing = await ctx.session.execute(
+        select(CandidateCommit).where(CandidateCommit.execution_id == ctx.execution_id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise PathPolicyViolation("candidate commit already exists for execution")
     git = GitCli()
     git.run(["add", "-A"], cwd=ctx.workspace_path)
     from core.domain.tasks.models import Task
@@ -61,6 +68,10 @@ async def git_commit(ctx: ToolExecutionContext, params: dict[str, object]) -> di
                 "protected tests missing from worktree: " + ", ".join(missing)
             )
     status = git.run(["status", "--porcelain"], cwd=ctx.workspace_path).stdout.splitlines()
+    if not status:
+        # A clean worktree would make `git commit` exit non-zero and surface as a crashed
+        # tool call; report it as an ordinary refusal the agent can act on.
+        raise PathPolicyViolation("nothing to commit: no file differs from the base commit")
     changed: list[dict[str, object]] = []
     for line in status:
         if len(line) < 4:
@@ -104,11 +115,6 @@ async def git_commit(ctx: ToolExecutionContext, params: dict[str, object]) -> di
     )
     sha = git.run(["rev-parse", "HEAD"], cwd=ctx.workspace_path).stdout.strip()
     diff = git.run(["diff", f"{parent}..{sha}"], cwd=ctx.workspace_path).stdout
-    existing = await ctx.session.execute(
-        select(CandidateCommit).where(CandidateCommit.execution_id == ctx.execution_id)
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise PathPolicyViolation("candidate commit already exists for execution")
     from core.execution.artifacts import ArtifactStore
 
     store = ArtifactStore()

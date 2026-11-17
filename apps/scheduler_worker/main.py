@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 import core.domain.registry  # noqa: F401  # every mapper must be registered before first use
+from core.autopilot.service import AutopilotService
 from core.bootstrap.connectors import ensure_connectors_registered
 from core.commands.context import CommandContext
 from core.config.settings import get_settings
@@ -63,6 +64,14 @@ async def run_tick(
     sweeper = LeaseSweeper()
     worktree_sweeper = WorktreeSweeper()
     materialization = MaterializationLoop()
+    autopiloted = 0
+    if settings.autopilot_enabled:
+        # Own transaction: an Autopilot failure must never roll back admission or sweeps.
+        try:
+            async with session_factory() as session, session.begin():
+                autopiloted = await AutopilotService().tick(session, ctx)
+        except Exception:
+            logger.exception("scheduler_worker.autopilot_failed")
     async with session_factory() as session, session.begin():
         admitted = await admission.admit_batch(session, settings.scheduler_admit_batch_size, ctx)
         expired = await sweeper.sweep_expired(session, ctx)
@@ -78,6 +87,7 @@ async def run_tick(
         purged = await run_retention_purge(session)
     logger.info(
         "scheduler_worker.tick",
+        autopilot_cycles=autopiloted,
         admitted=len(admitted),
         expired_leases=expired,
         materialized=materialized,

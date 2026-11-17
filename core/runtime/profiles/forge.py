@@ -31,7 +31,7 @@ def _tool_specs(profile: AgentProfile) -> list[ToolSpec]:
         specs.append(
             ToolSpec(
                 name=name,
-                description=f"{tool.resource}.{tool.action}",
+                description=tool.description,
                 parameters_schema=tool.params_schema,
             )
         )
@@ -39,6 +39,15 @@ def _tool_specs(profile: AgentProfile) -> list[ToolSpec]:
 
 
 _MAX_COMMIT_NUDGES = 3
+# Steps before the limit at which the agent is told to wrap up (test + commit).
+_WRAP_UP_STEPS = 6
+# Identical consecutive tool calls after which the agent is told it is looping.
+_REPEAT_LIMIT = 3
+_REPEAT_NOTE = (
+    "olympus: you have made the same {tool} call with the same arguments {count} times in a "
+    "row and it is not getting you closer. Change approach: read the file again, make a "
+    "different edit, run test.run, or call git.commit if the work is done."
+)
 _MAX_SCHEMA_FAILURES = 2
 _NO_COMMIT_NOTE = (
     "tool:submit_structured_output=>rejected: no candidate commit exists for this execution. "
@@ -59,6 +68,33 @@ async def _candidate_commit(deps: GraphDeps) -> Any | None:
         select(CandidateCommit).where(CandidateCommit.execution_id == deps.request.run_id)
     )
     return cc_row.scalar_one_or_none()
+
+
+async def _commit_left_over_work(deps: GraphDeps) -> list[str]:
+    """Agents sometimes finish (or run out of steps) with tested changes but no commit; the
+    whole attempt is then discarded as "missing candidate commit". Commit what is in the
+    worktree through the normal gateway tool (same scope and protected-test rules) so the
+    validators and checks judge the work. Returns the committed paths, or [] if nothing was
+    committed."""
+    if deps.session is None or await _candidate_commit(deps) is not None:
+        return []
+    try:
+        result = await deps.tool_gateway.request(
+            "git.commit",
+            {"message": "Olympus: commit the agent's uncommitted work at the end of its run"},
+        )
+    except Exception:
+        return []
+    try:
+        payload = json.loads(result.content)
+    except (json.JSONDecodeError, TypeError):
+        payload = {}
+    cc = await _candidate_commit(deps)
+    if cc is None:
+        return []
+    files = payload.get("changed_files") if isinstance(payload, dict) else None
+    rows = files if isinstance(files, list) else (cc.changed_files or [])
+    return [str(r.get("path")) for r in rows if isinstance(r, dict) and r.get("path")]
 
 
 async def _implementation_result_from_candidate_commit(
@@ -118,8 +154,15 @@ def _build_forge_graph(deps: GraphDeps) -> Any:
             "execution_id": str(deps.request.run_id),
             "correlation_id": str(deps.request.run_id),
         }
+        last_call: tuple[str, str] | None = None
+        repeats = 0
         while step < deps.profile.max_steps and output is None:
             step += 1
+            if step == deps.profile.max_steps - _WRAP_UP_STEPS and deps.session is not None:
+                messages.append(
+                    f"olympus: only {_WRAP_UP_STEPS} steps left. Stop editing: run test.run, "
+                    "call git.commit, then submit the ImplementationResult."
+                )
             context_text = "\n".join(messages)
             try:
                 result = await deps.model_router.invoke(
@@ -156,6 +199,11 @@ def _build_forge_graph(deps: GraphDeps) -> Any:
                         break
                     tool_result = await deps.tool_gateway.request(call.name, call.arguments)
                     messages.append(f"tool:{call.name}=>{tool_result.content}")
+                    signature = (call.name, json.dumps(call.arguments, sort_keys=True, default=str))
+                    repeats = repeats + 1 if signature == last_call else 1
+                    last_call = signature
+                    if repeats >= _REPEAT_LIMIT:
+                        messages.append(_REPEAT_NOTE.format(tool=call.name, count=repeats))
                     try:
                         payload = json.loads(tool_result.content)
                     except json.JSONDecodeError:
@@ -185,6 +233,7 @@ def _build_forge_graph(deps: GraphDeps) -> Any:
                 messages.append(_NO_COMMIT_NOTE)
                 continue
             output = submitted
+        safety_paths = await _commit_left_over_work(deps)
         if output is None and messages:
             try:
                 finalize = await deps.model_router.invoke(
@@ -218,6 +267,11 @@ def _build_forge_graph(deps: GraphDeps) -> Any:
             output = await _implementation_result_from_candidate_commit(deps, contract)
         if output is None:
             raise ValueError("forge did not produce ImplementationResult")
+        if safety_paths:
+            # The report was written without knowing about the safety commit; every committed
+            # file must be reported.
+            reported = list(output.get("changed_files") or [])
+            output["changed_files"] = reported + [p for p in safety_paths if p not in reported]
         return {
             "output": output,
             "messages": messages,

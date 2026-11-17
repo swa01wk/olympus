@@ -156,12 +156,17 @@ class AssuranceOrchestrator:
             model_alias="review",
             required_outputs=["artifact:WARDEN_REVIEW"],
         )
+        from core.assurance.agent_inputs import warden_review_inputs
+
         contract = TaskContract(
             task_id=task.id,
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body=body.model_dump(mode="json"),
+            body={
+                **body.model_dump(mode="json"),
+                "_snapshot": await warden_review_inputs(session, ic),
+            },
             content_hash=sha256_hex(f"warden-{ic.id}"),
             compiled_by="assurance",
         )
@@ -196,12 +201,17 @@ class AssuranceOrchestrator:
             model_alias="verification_planning",
             required_outputs=["artifact:VERIFICATION_PLAN"],
         )
+        from core.assurance.agent_inputs import sentinel_plan_inputs
+
         contract = TaskContract(
             task_id=task.id,
             key="v1",
             version=1,
             status=TaskContractStatus.ISSUED,
-            body=body.model_dump(mode="json"),
+            body={
+                **body.model_dump(mode="json"),
+                "_snapshot": await sentinel_plan_inputs(session, ic),
+            },
             content_hash=sha256_hex(f"sentinel-plan-{ic.id}"),
             compiled_by="assurance",
         )

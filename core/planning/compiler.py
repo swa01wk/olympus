@@ -61,6 +61,8 @@ class CompilerInputs:
     new_acceptance_test_refs: tuple[str, ...] = ()
     extra_constraints: tuple[str, ...] = ()
     deny_scope_prefixes: tuple[str, ...] = ()
+    # file_scope of other implementation specs the task covers (see task_file_scope).
+    extra_file_scope: tuple[str, ...] = ()
 
 
 class TaskContractCompiler:
@@ -71,7 +73,10 @@ class TaskContractCompiler:
 
     def _build(self, inputs: CompilerInputs) -> tuple[TaskContractBody, dict[str, Any]]:
         draft = inputs.task_draft
-        allowed = intersect_scopes(draft.allowed_scope, inputs.implementation_spec_body.file_scope)
+        allowed = intersect_scopes(
+            draft.allowed_scope,
+            [*inputs.implementation_spec_body.file_scope, *inputs.extra_file_scope],
+        )
         if inputs.impact_file_paths:
             impact_scope = sorted(inputs.impact_file_paths)
             allowed = intersect_scopes(allowed, impact_scope)
@@ -124,9 +129,10 @@ class TaskContractCompiler:
                 )
             )
 
-        base_policy: Literal["CYCLE_BASE", "DEPENDENCY_INTEGRATION"] = (
-            "DEPENDENCY_INTEGRATION" if inputs.has_dependencies else "CYCLE_BASE"
-        )
+        # Merge queue: every task starts from all the code finished so far in the cycle (its
+        # dependencies included, since they finish first), so tasks build on each other instead
+        # of all starting from the cycle base and colliding when merged.
+        base_policy: Literal["QUEUE_TIP"] = "QUEUE_TIP"
         wall = _SIZE_TIMEOUTS.get(draft.estimated_size, 1800)
         allowed_actions = list(_forge_allowed_actions())
 

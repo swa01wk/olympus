@@ -85,9 +85,12 @@ class WorktreeManager:
         wt_path = self._locator.resolve(workspace.storage_backend, logical)
         wt_path.parent.mkdir(parents=True, exist_ok=True)
         self._prune_stale(git_dir)
+        # A caller-named branch (an integration branch) can be left over from an earlier run
+        # of the same candidate; -B resets it to the base instead of failing on "already exists".
+        create_flag = "-B" if branch_name else "-b"
         self._git.run(
             GitCli.hook_disabled_config_args()
-            + ["worktree", "add", "-b", branch, str(wt_path), base_sha],
+            + ["worktree", "add", create_flag, branch, str(wt_path), base_sha],
             git_dir=git_dir,
             check=True,
         )

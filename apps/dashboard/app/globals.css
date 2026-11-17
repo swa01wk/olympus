@@ -5,6 +5,7 @@
 @import "../styles/map.css";
 @import "../styles/dialogs.css";
 @import "../styles/studio.css";
+@import "../styles/simple.css";
 
 @theme inline {
   --color-bg: var(--bg);

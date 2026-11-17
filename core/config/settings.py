@@ -135,6 +135,11 @@ class OlympusSettings(BaseSettings):
         default=10,
         validation_alias="OLYMPUS_SCHEDULER_ADMIT_BATCH_SIZE",
     )
+    autopilot_enabled: bool = Field(
+        default=True,
+        validation_alias="OLYMPUS_AUTOPILOT_ENABLED",
+        description="Let the scheduler worker advance cycles that have Autopilot turned on.",
+    )
     product_source_decompose_max_chars: int = Field(
         default=32_000,
         validation_alias="OLYMPUS_PRODUCT_SOURCE_DECOMPOSE_MAX_CHARS",

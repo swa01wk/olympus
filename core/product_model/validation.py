@@ -5,7 +5,8 @@ from core.product_model.schemas import AcceptanceCriterionDraft, ProductDecompos
 
 
 def sanitize_proposal_requirement_refs(proposal: ProductDecomposition) -> ProductDecomposition:
-    """Repair AC requirement_refs that point at requirements outside the AC's feature_spec."""
+    """Repair AC requirement_refs that point at requirements outside the AC's feature_spec,
+    and make sure every spec that has ACs has at least one mandatory one."""
     reqs_by_spec: dict[str, list[str]] = {}
     for req in proposal.requirements:
         reqs_by_spec.setdefault(req.feature_spec_ref, []).append(req.ref)
@@ -24,9 +25,40 @@ def sanitize_proposal_requirement_refs(proposal: ProductDecomposition) -> Produc
         else:
             new_acs.append(ac)
 
-    if not changed:
+    new_acs, promoted = _promote_one_mandatory_ac_per_spec(new_acs)
+    if not changed and not promoted:
         return proposal
     return proposal.model_copy(update={"acceptance_criteria": new_acs})
+
+
+def _promote_one_mandatory_ac_per_spec(
+    acs: list[AcceptanceCriterionDraft],
+) -> tuple[list[AcceptanceCriterionDraft], bool]:
+    """Models sometimes mark every AC of a nice-to-have feature optional; the spec still needs one.
+
+    Promotes the first AC that is not REVIEW_ALLOWED (promoting one of those could trip the
+    non-functional review rule), falling back to the first AC. Specs with no ACs are left alone.
+    """
+    by_spec: dict[str, list[int]] = {}
+    for i, ac in enumerate(acs):
+        by_spec.setdefault(ac.feature_spec_ref, []).append(i)
+
+    out = list(acs)
+    promoted = False
+    for indices in by_spec.values():
+        if any(out[i].mandatory for i in indices):
+            continue
+        pick = next(
+            (
+                i
+                for i in indices
+                if out[i].evidence_requirement != EvidenceRequirement.REVIEW_ALLOWED
+            ),
+            indices[0],
+        )
+        out[pick] = out[pick].model_copy(update={"mandatory": True})
+        promoted = True
+    return out, promoted
 
 
 def validate_proposal(proposal: ProductDecomposition) -> list[str]:

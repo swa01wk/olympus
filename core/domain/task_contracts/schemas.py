@@ -30,7 +30,9 @@ class TaskContractBody(BaseModel):
     work_type: WorkType
     inputs: list[VersionedRef]
     repository_id: uuid.UUID | None = None
-    base_policy: Literal["CYCLE_BASE", "DEPENDENCY_INTEGRATION", "EXPLICIT_SHA", "NONE"] = "NONE"
+    base_policy: Literal[
+        "CYCLE_BASE", "DEPENDENCY_INTEGRATION", "QUEUE_TIP", "EXPLICIT_SHA", "NONE"
+    ] = "NONE"
     base_commit: str | None = None
     allowed_scope: list[str] = []
     constraints: list[str] = []

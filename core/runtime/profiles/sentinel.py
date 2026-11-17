@@ -42,8 +42,8 @@ def _build_sentinel_plan_graph(deps: GraphDeps) -> Any:
         system = render_prompt(
             template,
             {
-                "obligations_json": json.dumps(snap.get("obligations") or [], indent=2),
-                "tests_json": json.dumps(snap.get("tests") or [], indent=2),
+                "obligations_json": _json_text(snap.get("obligations")),
+                "tests_json": _json_text(snap.get("tests")),
                 "decision_context": decision_context,
             },
         )
@@ -83,7 +83,7 @@ def _build_sentinel_summarize_graph(deps: GraphDeps) -> Any:
         snap = deps.request.snapshot or {}
         system = render_prompt(
             template,
-            {"evidence_summary": json.dumps(snap.get("evidence_summary") or {}, indent=2)},
+            {"evidence_summary": _json_text(snap.get("evidence_summary") or {})},
         )
         result = await deps.model_router.invoke(
             ModelRequest(

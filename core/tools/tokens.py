@@ -101,12 +101,15 @@ async def validate_token(
         raise TokenValidationError("token worker mismatch")
     now = datetime.now(UTC)
     expires = _normalize_expires(row.expires_at)
-    if expires < now:
-        raise TokenValidationError("token expired")
     lease = await session.get(ExecutionLease, row.lease_id)
     execution = await session.get(Execution, row.execution_id)
     if lease is None or execution is None:
         raise TokenValidationError("execution or lease missing")
+    # The token is signed with the lease's expiry at issue time, but heartbeats keep extending
+    # the lease while the agent works; honour the live lease so a run longer than one lease
+    # TTL keeps its tools (the signature below still checks the original expiry).
+    if max(expires, _normalize_expires(lease.expires_at)) < now:
+        raise TokenValidationError("token expired")
     if lease.state != LeaseState.ACTIVE:
         raise TokenValidationError("lease not active")
     if execution.status not in {ExecutionStatus.STARTED, ExecutionStatus.CHECKPOINTED}:

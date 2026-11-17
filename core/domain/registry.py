@@ -9,6 +9,7 @@ from core.assurance.models import (  # noqa: F401
     VerificationPlanRow,
     WardenReviewRecord,
 )
+from core.autopilot.models import AutopilotState  # noqa: F401
 from core.domain.actions.models import ActionRequest, ActionResult  # noqa: F401
 from core.domain.actors.models import Actor, ApiToken  # noqa: F401
 from core.domain.approvals.models import Approval  # noqa: F401

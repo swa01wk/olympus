@@ -1,9 +1,20 @@
 COMPOSE := docker compose
 COMPOSE_INTEGRATIONS := $(COMPOSE) -f docker-compose.yml -f deploy/compose.test.yaml
 
-.PHONY: setup db-up db-down wait-postgres migrate lint typecheck test-unit test-persistence test-integration test-security test-git test-live test-journey check verify-phases verify-phases-live verify-phase-08-exit verify-phase-10-exit verify-phase-11-exit verify-phase-13 verify-phase-13-exit verify-phase-14 verify-phase-14-exit verify-phase-15 verify-phase-15-exit integrations-up integrations-down integrations-wait integrations-seed integrations-ready test-connector test-integrations-p16 test-connector-live test-journey-issue-tracker verify-phase-16 verify-phase-16-exit verify-phase-16-live-journey verify-phase-17 verify-phase-17-exit mvp-env mvp-demo mvp-demo-chaos mvp-acceptance
+.PHONY: dev install-cli setup db-up db-down wait-postgres migrate lint typecheck test-unit test-persistence test-integration test-security test-git test-live test-journey check verify-phases verify-phases-live verify-phase-08-exit verify-phase-10-exit verify-phase-11-exit verify-phase-13 verify-phase-13-exit verify-phase-14 verify-phase-14-exit verify-phase-15 verify-phase-15-exit integrations-up integrations-down integrations-wait integrations-seed integrations-ready test-connector test-integrations-p16 test-connector-live test-journey-issue-tracker verify-phase-16 verify-phase-16-exit verify-phase-16-live-journey verify-phase-17 verify-phase-17-exit mvp-env mvp-demo mvp-demo-chaos mvp-acceptance
 
 COMPOSE_MVP := $(COMPOSE) -f deploy/compose.demo.yaml
+
+# One command for solo local use: database, API, workers and dashboard (Ctrl+C stops).
+dev:
+	@./scripts/dev.sh
+
+# Put `olympus` on your PATH (~/.local/bin) so you can run `olympus start` in any folder.
+install-cli:
+	@mkdir -p "$$HOME/.local/bin"
+	@printf '#!/usr/bin/env bash\nexec uv run --quiet --project "%s" python -m apps.cli.main "$$@"\n' "$(CURDIR)" > "$$HOME/.local/bin/olympus"
+	@chmod +x "$$HOME/.local/bin/olympus"
+	@echo "Installed: $$HOME/.local/bin/olympus  (make sure ~/.local/bin is on your PATH)"
 
 setup:
 	uv sync --all-groups

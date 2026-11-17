@@ -339,6 +339,7 @@ class GitLocalConnector:
                         continue
                     merge = self._git.run(
                         GitCli.hook_disabled_config_args()
+                        + GitCli.integration_identity_args()
                         + [
                             "merge",
                             "--no-ff",

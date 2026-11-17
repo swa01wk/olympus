@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Olympus",
-  description: "Control-plane operator interface",
+  description: "Build software with an AI team that asks you only when a decision is yours.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

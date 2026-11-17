@@ -138,6 +138,13 @@ class GitCli:
     def hook_disabled_config_args() -> list[str]:
         return ["-c", "core.hooksPath=/dev/null"]
 
+    @staticmethod
+    def integration_identity_args() -> list[str]:
+        """Name/email for commits Olympus itself makes (merges). The scrubbed env ignores the
+        user's global git config, so without these `git merge` fails with "Please tell me who
+        you are"."""
+        return ["-c", "user.name=Olympus Integration", "-c", "user.email=integration@olympus.local"]
+
 
 def resolve_git_metadata_dir(worktree_path: Path) -> Path:
     """Directory that holds ``info/exclude`` (linked worktree gitdir or ``.git/``)."""

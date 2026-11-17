@@ -20,7 +20,7 @@ from core.domain.events.append import append_domain_event
 from core.domain.execution_workspaces.models import ExecutionWorkspace
 from core.domain.executions.models import Execution, ExecutionSnapshot
 from core.domain.task_contracts.models import TaskContract
-from core.domain.task_contracts.schemas import TaskContractBody
+from core.domain.task_contracts.schemas import TaskContractBody, parse_task_contract_body
 from core.policy.action_policy import evaluate_action_policy
 from core.repositories.workspace_locator import WorkspaceLocator
 from core.tools.catalog import get_tool
@@ -109,7 +109,7 @@ class ToolGateway:
         bind(olympus_execution_id=str(execution.id))
 
         contract_row = await self._session.get(TaskContract, execution.task_contract_id)
-        contract = TaskContractBody.model_validate(contract_row.body) if contract_row else None
+        contract = parse_task_contract_body(contract_row.body) if contract_row else None
         if contract is not None and not contract.allowed_scope:
             contract = contract.model_copy(update={"allowed_scope": ["**"]})
         agent_profile = execution.agent_profile

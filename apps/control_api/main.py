@@ -29,6 +29,7 @@ from apps.control_api.routers import (
     assurance,
     audit,
     auth_tokens,
+    autopilot,
     baselines,
     brownfield,
     candidate_commits,
@@ -151,6 +152,7 @@ def create_app(settings: OlympusSettings | None = None) -> FastAPI:
     app.include_router(repositories.router)
     app.include_router(code_intelligence.router)
     app.include_router(delivery_cycles.router)
+    app.include_router(autopilot.router)
     app.include_router(tasks.router)
     app.include_router(executions.router)
     app.include_router(actions.router)

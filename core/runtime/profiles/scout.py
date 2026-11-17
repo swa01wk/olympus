@@ -23,7 +23,7 @@ def _tool_specs(profile: AgentProfile) -> list[ToolSpec]:
         specs.append(
             ToolSpec(
                 name=name,
-                description=f"{tool.resource}.{tool.action}",
+                description=tool.description,
                 parameters_schema=tool.params_schema,
             )
         )

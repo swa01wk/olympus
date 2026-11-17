@@ -138,3 +138,63 @@ async def test_git_commit_denied_when_protected_test_is_missing(db_session, syst
     )
     assert result.status == "FAILED"
     assert "protected tests missing" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_second_git_commit_is_refused_without_touching_the_branch(
+    db_session, system_ctx
+) -> None:
+    project, repo, sha = await seed_greenfield_repository(
+        db_session, system_ctx, project_key="two-commits"
+    )
+    fixture = await seed_code_change_task(db_session, system_ctx, project, repo, sha)
+    bundle = await seed_execution_with_worktree(
+        db_session, system_ctx, fixture, key_prefix="two-commits"
+    )
+    gateway = ToolGateway(db_session)
+    branch = f"olympus/{bundle.execution.key}"
+
+    async def write_and_commit(content: str):  # type: ignore[no-untyped-def]
+        await gateway.handle(
+            bundle.token, "repo.write", {"path": "app/feature.py", "content": content}
+        )
+        return await gateway.handle(
+            bundle.token, "git.commit", {"branch": branch, "message": "change"}
+        )
+
+    first = await write_and_commit("A = 1\n")
+    assert first.status == "SUCCEEDED", first.error
+
+    second = await write_and_commit("A = 2\n")
+    assert second.status == "FAILED"
+    assert "already exists" in (second.error or "")
+    # Refused before git ran: the edit is still uncommitted instead of an unrecorded commit.
+    status = await gateway.handle(bundle.token, "git.status", {})
+    assert "app/feature.py" in str(status.output)
+
+
+@pytest.mark.asyncio
+async def test_unchanged_write_is_flagged_and_empty_commit_is_a_clean_refusal(
+    db_session, system_ctx
+) -> None:
+    project, repo, sha = await seed_greenfield_repository(
+        db_session, system_ctx, project_key="noop-write"
+    )
+    fixture = await seed_code_change_task(db_session, system_ctx, project, repo, sha)
+    bundle = await seed_execution_with_worktree(
+        db_session, system_ctx, fixture, key_prefix="noop-write"
+    )
+    gateway = ToolGateway(db_session)
+    # Fresh worktree, nothing changed yet: committing is a clean refusal, not a crashed call.
+    empty = await gateway.handle(
+        bundle.token, "git.commit", {"branch": f"olympus/{bundle.execution.key}", "message": "m"}
+    )
+    assert empty.status == "FAILED"
+    assert "nothing to commit" in (empty.error or "")
+
+    args = {"path": "app/x.py", "content": "X = 1\n"}
+    first = await gateway.handle(bundle.token, "repo.write", args)
+    assert "unchanged" not in str(first.output)
+    again = await gateway.handle(bundle.token, "repo.write", args)
+    assert again.status == "SUCCEEDED"
+    assert (again.output or {}).get("unchanged") is True

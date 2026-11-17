@@ -127,7 +127,7 @@ class GitCli:
     def _scrubbed_env(self) -> dict[str, str]:
         env = {
             "PATH": os.environ.get("PATH", ""),
-            "HOME": os.environ.get("HOME", "/tmp"),
+            "HOME": os.environ.get("HOME", "/tmp"),  # nosec B108 (fallback HOME, no files made)
             "LANG": "C.UTF-8",
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": "/dev/null",

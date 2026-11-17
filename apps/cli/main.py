@@ -27,6 +27,8 @@ from apps.cli.detect import Detection, detect, looks_secret
 
 OLYMPUS_HOME = Path(__file__).resolve().parents[2]
 API_URL = os.environ.get("OLYMPUS_API_URL", "http://127.0.0.1:8000").rstrip("/")
+if not API_URL.startswith(("http://", "https://")):
+    raise SystemExit(f"OLYMPUS_API_URL must be an http(s) URL, got {API_URL!r}")
 UI_URL = os.environ.get("OLYMPUS_UI_URL", "http://127.0.0.1:3010").rstrip("/")
 TOKEN_FILE = Path(os.environ.get("OLYMPUS_TOKEN_FILE", OLYMPUS_HOME / "var/olympus/local-token"))
 
@@ -68,7 +70,7 @@ def api(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
     if method != "GET":
         request.add_header("Idempotency-Key", str(uuid.uuid4()))
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:  # nosec B310 (http(s) only, checked at import)
             raw = response.read()
             return json.loads(raw) if raw else None
     except urllib.error.HTTPError as exc:

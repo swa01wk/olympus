@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -13,6 +16,38 @@ from core.repositories.service import RepositoryService
 from core.repositories.workspace_locator import WorkspaceLocator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# One git origin per fixture per test process: a copy of the fixture's files, committed with a
+# fixed author and date so its SHA is the same on every run. Tests clone, fetch and commit
+# against this copy and never touch tests/fixtures/ (writing there once turned the committed
+# fixtures into near-empty repos).
+_ORIGINS: dict[Path, Path] = {}
+_COPY_IGNORE = shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache", "*.pyc")
+_FIXED_GIT_ENV = {
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@t.com",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@t.com",
+    "GIT_AUTHOR_DATE": "2026-01-01T00:00:00+00:00",
+    "GIT_COMMITTER_DATE": "2026-01-01T00:00:00+00:00",
+}
+
+
+def fixture_origin(fixture_dir: Path) -> Path:
+    """A git repository holding a copy of ``fixture_dir`` (made once, then reused)."""
+    src = fixture_dir.resolve()
+    cached = _ORIGINS.get(src)
+    if cached is not None and (cached / ".git").is_dir():
+        return cached
+    if not src.is_dir() or not any(p for p in src.iterdir() if p.name != ".git"):
+        raise RuntimeError(f"Test fixture {src} is missing or empty")
+    dest = Path(tempfile.mkdtemp(prefix=f"olympus-fixture-{src.name}-"))
+    shutil.copytree(src, dest, dirs_exist_ok=True, ignore=_COPY_IGNORE)
+    env = {**os.environ, **_FIXED_GIT_ENV}
+    for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "fixture"]):
+        subprocess.run(["git", *args], cwd=dest, env=env, check=True, capture_output=True)
+    _ORIGINS[src] = dest
+    return dest
+
 
 async def materialize_existing_repository(
     session: AsyncSession,
@@ -21,17 +56,7 @@ async def materialize_existing_repository(
     ctx: CommandContext,
 ) -> str:
     """Clone fixture origin into an already-registered repository workspace."""
-    origin = fixture_dir.resolve()
-    if not (origin / ".git" / "HEAD").exists() and not (origin / "HEAD").exists():
-        (origin / "README.md").write_text("fixture\n", encoding="utf-8")
-        subprocess.run(["git", "init"], cwd=origin, check=True, capture_output=True)
-        subprocess.run(["git", "add", "-A"], cwd=origin, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-m", "init"],
-            cwd=origin,
-            check=True,
-            capture_output=True,
-        )
+    origin = fixture_origin(fixture_dir)
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=origin,
@@ -63,42 +88,7 @@ async def materialize_fixture_repository(
     fixture_dir: Path,
     ctx: CommandContext | None = None,
 ) -> tuple[Repository, str]:
-    origin = fixture_dir.resolve()
-    if not (origin / ".git" / "HEAD").exists() and not (origin / "HEAD").exists():
-        (origin / "README.md").write_text("fixture\n", encoding="utf-8")
-        subprocess.run(["git", "init"], cwd=origin, check=True, capture_output=True)
-        subprocess.run(["git", "add", "-A"], cwd=origin, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-m", "init"],
-            cwd=origin,
-            check=True,
-            capture_output=True,
-        )
-    else:
-        dirty = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=origin,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        if dirty.stdout.strip():
-            subprocess.run(["git", "add", "-A"], cwd=origin, check=True, capture_output=True)
-            subprocess.run(
-                [
-                    "git",
-                    "-c",
-                    "user.email=t@t.com",
-                    "-c",
-                    "user.name=t",
-                    "commit",
-                    "-m",
-                    "fixture sync",
-                ],
-                cwd=origin,
-                check=True,
-                capture_output=True,
-            )
+    origin = fixture_origin(fixture_dir)
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=origin,

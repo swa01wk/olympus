@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import tempfile
 import uuid
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import defusedxml.ElementTree as ET  # junit XML comes from agent-written tests
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +30,8 @@ def _parse_junit(path: Path, workspace: Path) -> dict[str, bool]:
     if not path.is_file():
         return {}
     root = ET.parse(path).getroot()
+    if root is None:
+        return {}
     out: dict[str, bool] = {}
     for case in root.iter("testcase"):
         nodeid = junit_case_node_id(workspace, case.get("classname", ""), case.get("name", ""))

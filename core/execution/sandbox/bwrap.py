@@ -26,7 +26,7 @@ class BwrapSandboxRunner:
             str(ws),
             "/work",
             "--tmpfs",
-            "/tmp",
+            "/tmp",  # nosec B108 (fresh tmpfs mounted inside the sandbox)
             "--chdir",
             "/work",
             "--dev",

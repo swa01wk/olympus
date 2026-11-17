@@ -48,12 +48,19 @@ class QueueTipResolver:
         from core.domain.repositories.models import Repository, RepositoryWorkspace
 
         cycle = await session.get(DeliveryCycle, task.delivery_cycle_id)
-        if cycle is None or cycle.base_sha is None:
-            raise ValueError("BASE_COMMIT_UNAVAILABLE")
+        if cycle is None:
+            raise ValueError("cycle missing")
         repo = await session.get(Repository, repository_id)
         ws = await session.get(RepositoryWorkspace, repo.workspace_id) if repo else None
-        if ws is None:
-            raise ValueError("BASE_COMMIT_UNAVAILABLE")
+        if cycle.base_sha is None or ws is None:
+            # Like CYCLE_BASE: no base yet is "not available" (the scheduler waits), not an error.
+            return BaseResolution(
+                policy="QUEUE_TIP",
+                base_commit=cycle.base_sha,
+                commit_available=False,
+                inputs={"policy": "QUEUE_TIP", "cycle_base": cycle.base_sha, "heads": []},
+                repository={"repository_id": str(repository_id)},
+            )
         git_dir = self._locator.resolve(ws.storage_backend, ws.logical_location)
         base = cycle.base_sha
         repo_block: dict[str, object] = {"repository_id": str(repository_id)}

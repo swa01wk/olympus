@@ -32,9 +32,20 @@ _FIXED_GIT_ENV = {
 }
 
 
+_FIXTURES_ROOT = Path(__file__).resolve().parent
+
+
 def fixture_origin(fixture_dir: Path) -> Path:
-    """A git repository holding a copy of ``fixture_dir`` (made once, then reused)."""
+    """The git origin to clone for ``fixture_dir``.
+
+    A committed fixture (under tests/fixtures/) is copied into a temporary repository once and
+    reused. A directory a test made itself (e.g. under tmp_path) is used in place, as before:
+    initialised if it is not a repository yet, and its uncommitted changes committed.
+    """
     src = fixture_dir.resolve()
+    if not src.is_relative_to(_FIXTURES_ROOT):
+        _commit_in_place(src)
+        return src
     cached = _ORIGINS.get(src)
     if cached is not None and (cached / ".git").is_dir():
         return cached
@@ -47,6 +58,24 @@ def fixture_origin(fixture_dir: Path) -> Path:
         subprocess.run(["git", *args], cwd=dest, env=env, check=True, capture_output=True)
     _ORIGINS[src] = dest
     return dest
+
+
+def _commit_in_place(origin: Path) -> None:
+    env = {**os.environ, **_FIXED_GIT_ENV}
+    if not (origin / ".git" / "HEAD").exists() and not (origin / "HEAD").exists():
+        origin.mkdir(parents=True, exist_ok=True)
+        (origin / "README.md").write_text("fixture\n", encoding="utf-8")
+        for args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "init"]):
+            subprocess.run(["git", *args], cwd=origin, env=env, check=True, capture_output=True)
+        return
+    if (origin / "HEAD").exists() and not (origin / ".git").exists():
+        return  # a bare repository: nothing to commit
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=origin, capture_output=True, text=True, check=True
+    )
+    if dirty.stdout.strip():
+        for args in (["add", "-A"], ["commit", "-q", "-m", "fixture sync"]):
+            subprocess.run(["git", *args], cwd=origin, env=env, check=True, capture_output=True)
 
 
 async def materialize_existing_repository(

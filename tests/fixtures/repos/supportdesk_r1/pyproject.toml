@@ -5,4 +5,9 @@ requires-python = ">=3.12"
 dependencies = ["fastapi", "sqlalchemy", "pydantic"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.olympus]
+# Merge-time checks run the API smoke test only; behaviour tests are judged by the assurance gates.
+integration_pytest_args = ["tests/test_tickets_api.py"]

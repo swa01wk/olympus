@@ -24,7 +24,9 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> Ticke
 
 
 @router.patch("/{ticket_id}", response_model=TicketRead)
-def update_ticket(ticket_id: int, payload: TicketUpdate, db: Session = Depends(get_db)) -> TicketRead:
+def update_ticket(
+    ticket_id: int, payload: TicketUpdate, db: Session = Depends(get_db)
+) -> TicketRead:
     ticket = TicketService(db).update_status(ticket_id, payload.status)
     if ticket is None:
         raise HTTPException(status_code=404, detail="ticket not found")

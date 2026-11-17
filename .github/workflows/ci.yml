@@ -28,6 +28,10 @@ jobs:
       OLYMPUS_ENV: test
       OLYMPUS_STORAGE_ROOT: ./var/olympus
       OLYMPUS_WORKSPACE_ROOT: ./var/olympus/workspaces
+      # Model names only: tests swap in FakeProvider, so no API key or real call is involved.
+      # Without these, model aliases fail to resolve (locally they come from .env).
+      MODEL_PROVIDER: anthropic
+      MODEL_DEFAULT: claude-3-5-haiku-20241022
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

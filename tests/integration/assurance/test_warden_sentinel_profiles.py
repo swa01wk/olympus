@@ -8,9 +8,11 @@ import uuid
 import pytest
 from agents.sentinel.schemas import CharacterizationPlan, VerificationPlan
 from agents.warden.schemas import WardenReview
+from core.config.settings import OlympusSettings
 from core.runtime.agent_profiles import clear_profiles, get_profile
 from core.runtime.context import GraphDeps
 from core.runtime.contracts import AgentRunRequest, ContextItem
+from core.runtime.model_policy import ModelPolicy
 from core.runtime.model_router import ModelRouter
 from core.runtime.profiles.sentinel import register_sentinel_profiles
 from core.runtime.profiles.warden import register_warden_profile
@@ -24,6 +26,11 @@ def _fake_providers(fake: FakeProvider) -> dict[str, FakeProvider]:
     return {"anthropic": fake, "openai": fake, "fake": fake}
 
 
+def _fake_policy() -> ModelPolicy:
+    # Explicit models: CI has no .env, so env-derived settings leave aliases unresolved.
+    return ModelPolicy(OlympusSettings(model_provider="anthropic", model_default="fake-model"))
+
+
 @pytest.mark.asyncio
 async def test_sentinel_plan_via_model_router(db_session, system_actor) -> None:
     clear_profiles()
@@ -33,7 +40,9 @@ async def test_sentinel_plan_via_model_router(db_session, system_actor) -> None:
         mode="json"
     )
     fake.set_script([FakeScriptStep(structured=plan_payload)])
-    router = ModelRouter(db_session, actor_id=system_actor.id, providers=_fake_providers(fake))
+    router = ModelRouter(
+        db_session, actor_id=system_actor.id, providers=_fake_providers(fake), policy=_fake_policy()
+    )
     profile = get_profile("sentinel.plan")
     deps = GraphDeps(
         profile=profile,
@@ -64,7 +73,9 @@ async def test_sentinel_characterize_via_model_router(db_session, system_actor) 
     fake = FakeProvider()
     plan_payload = CharacterizationPlan(checks=[], skipped=[]).model_dump(mode="json")
     fake.set_script([FakeScriptStep(structured=plan_payload)])
-    router = ModelRouter(db_session, actor_id=system_actor.id, providers=_fake_providers(fake))
+    router = ModelRouter(
+        db_session, actor_id=system_actor.id, providers=_fake_providers(fake), policy=_fake_policy()
+    )
     profile = get_profile("sentinel.characterize")
     deps = GraphDeps(
         profile=profile,
@@ -103,7 +114,9 @@ async def test_warden_review_via_model_router(db_session, system_actor) -> None:
             )
         ]
     )
-    router = ModelRouter(db_session, actor_id=system_actor.id, providers=_fake_providers(fake))
+    router = ModelRouter(
+        db_session, actor_id=system_actor.id, providers=_fake_providers(fake), policy=_fake_policy()
+    )
     profile = get_profile("warden.review")
     deps = GraphDeps(
         profile=profile,
